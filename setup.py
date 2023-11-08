@@ -148,6 +148,20 @@ class Setup:
         else:
             print('Forehead E-tattoo stream not found')
         assert raw_dict is not {}, 'source is not supported'
+
+        # create annotation and set to raws
+        onset = stim_stream['time_stamps']
+        description = np.array([item for sub in stim_stream['time_series'] for item in sub])
+        ind_remove = []
+        for i in range(len(description)):
+            if description[i] == '':
+                ind_remove.append(i)
+        onset = np.delete(onset, ind_remove)
+        duration = np.zeros(onset.shape)
+        description = np.delete(description, ind_remove)
+        for key in raw_dict.keyskeys():
+            self.set_annotation(raw_dict[key], onset=onset, duration=duration, description=description)
+            raw_dict[key]
         return raw_dict # dict of mne.io.Raw
 
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):

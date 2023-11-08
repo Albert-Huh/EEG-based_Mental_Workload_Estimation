@@ -111,7 +111,13 @@ et_raw = mne.io.RawArray(et_data, et_info)
 
 # generate and add timestamped annotations to RawArray
 onsets = stim_stream['time_stamps']
-descriptions = [item for sub in stim_stream['time_series'] for item in sub]
+descriptions = np.array([item for sub in stim_stream['time_series'] for item in sub])
+ind_remove = []
+for i in range(len(descriptions)):
+    if descriptions[i] == '':
+        ind_remove.append(i)
+onsets = np.delete(onsets, ind_remove)
+descriptions = np.delete(descriptions, ind_remove)
 
 bv_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
 et_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
