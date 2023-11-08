@@ -60,9 +60,8 @@ class Filtering:
     def resample(self,new_sfreq=None, window='boxcar', events=None, verbose='warning'):
         
         if new_sfreq == None:
-            new_sfreq = 5*self.h_freq
-            self.sfreq = new_sfreq
-        elif new_sfreq > self.sfreq:
+            new_sfreq = 4*self.h_freqeq
+        if new_sfreq > self.sfreq:
             print('Error: New sampling frequency is greather than previous sampling freqeuncy. (Recommended new_f_s = 4 x high_f_c)')
             return
         filt_raw = self.raw.resample(sfreq=new_sfreq,
@@ -85,10 +84,12 @@ class Filtering:
             mne.viz.plot_filter(h=filter_params, sfreq=self.sfreq, flim=(0.01, self.sfreq/2))
         return filt_raw
 
-    def external_artifact_rejection(self):
+    def external_artifact_rejection(self, resample=False, notch=False):
         self.raw.load_data()
-        self.raw = self.resample()
-        self.raw = self.notch()
+        if resample:
+            self.raw = self.resample()
+        if notch:
+            self.raw = self.notch()
         filt_raw = self.bandpass()
         return filt_raw
     
