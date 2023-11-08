@@ -3,6 +3,8 @@ import pyxdf
 import mne
 import numpy as np
 import re
+import matplotlib.pyplot as plt
+from datetime import datetime, date, time, timedelta
 
 class Setup:
     def __init__(self,data_path: str = None, data_type: str = None, stream_source: dict = None):
@@ -146,4 +148,77 @@ class Setup:
         else:
             print('Forehead E-tattoo stream not found')
         assert raw_list is not [], 'source is not supported'
-        return raw_list
+        return raw_list # list of mne.io.Raw
+
+    def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
+        my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
+        raw.set_annotations(my_annot)
+
+    def get_annotation_info(self, raw: mne.io.Raw):
+        onset = raw.annotations.onset
+        duration = raw.annotations.duration
+        description = raw.annotations.description
+        return onset, duration, description # ndarray or float, float, str
+
+    def annotate_interactively(self, raw: mne.io.Raw):
+        fig = raw.plot()
+        fig.fake_keypress('a')
+        plt.show(block=True)
+        interactive_annot = raw.annotations
+        return interactive_annot # class mne.Annotations
+    
+    def read_report_txt(self, reprot_path: str):
+        file = open(reprot_path, 'r')
+        # read .txt file line by line
+        content = list(file)
+        lines = []
+        for i in content:
+            lines.append(i.replace('\n',''))
+        # close the Report.txt
+        file.close()
+        return lines # list of str
+
+    def get_nback_key(self):
+        # get the list of indication stings to extract data
+        key_alpha_solution = 'Alpha Answer '
+        key_alpha_user = 'User Input Alpha: '
+        key_position_solution = 'Position Answer '
+        key_position_user = 'User Input Position: '
+        key_nasa_tlx = 'NASA TLX Responses: '
+        key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx]
+        return key_list # list of str
+
+    def get_nback_report_data(self, lines: list, key_list: list):
+        # get the list of nback sequence
+        nback_sequence = lines[5] # Sequence is on line 6
+        sequence = [int(s) for s in list(nback_sequence) if s.isdigit()]
+        # create report dict data object
+        report = {}
+        report['nback_sequence'] = sequence
+        report['sol_alphabet'] = []
+        report['sol_position'] = []
+        report['user_alphabet'] = []
+        report['user_position'] = []
+        report['nasa_tlx'] = []
+        key_ind = ['nback_sequence','sol_alphabet','sol_position','user_alphabet','user_position','nasa_tlx']
+
+        line_idx = 0
+        flag = 0
+        line_timestamps = []
+        timestamps = []
+        # loop through the file line by line
+        for line in lines:
+            # checking string is present in line or not
+            str_idx = 0
+            for string in key_list:
+                if string in line:
+                    lst = line.split('[',1)[1].replace(']','').split(', ') # split str to a list of str
+                    lst = [s == 'True' for s in lst] # convert list of str to list of booleen
+                    report[key_ind[str_idx]].append(lst)
+                str_idx += 1
+            line_idx += 1
+        if flag == 0:
+            print('The key string for stim timestamps were not found')
+        else:
+            print('The key string for stim timestamps were found in line', line_timestamps)
+        return report # dict of list
