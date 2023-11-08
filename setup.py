@@ -36,7 +36,7 @@ class Setup:
 
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
-        list_stim_id.append = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
+        list_stim_id = list_stim_id + pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
 
         # detect the EEG stream id
         list_eeg_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
