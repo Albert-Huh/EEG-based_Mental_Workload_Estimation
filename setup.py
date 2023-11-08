@@ -1,10 +1,8 @@
-import os
 import pyxdf
 import mne
 import numpy as np
 import re
 import matplotlib.pyplot as plt
-from datetime import datetime, date, time, timedelta
 
 class Setup:
     def __init__(self,data_path: str = None, data_type: str = None, stream_source: dict = None):
@@ -28,7 +26,7 @@ class Setup:
             assert stream_source is not None, 'stream_source of xdf file is not defined'
             if not isinstance(stream_source, dict):
                 raise TypeError
-            self.raw_list = self.read_xdf()
+            self.raw_dict = self.read_xdf()
         else:
             print('data_type is not supported')
     
@@ -38,6 +36,7 @@ class Setup:
 
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
+        list_stim_id.append = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
 
         # detect the EEG stream id
         list_eeg_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
@@ -50,7 +49,8 @@ class Setup:
         for stream in streams:
             stream_id = stream['info']['stream_id']
             if stream['info']['stream_id'] in list_stim_id:
-                stim_stream = stream
+                if len(stream['time_series']) != 0:
+                    stim_stream = stream
             elif stream['info']['stream_id'] in list_eeg_id:
                 eeg_stream.append(stream)
                 # find first timestamp
@@ -82,7 +82,7 @@ class Setup:
             stream['time_series'] = stream['time_series'][strat_ind:end_ind+1,:]
 
         # seperate streams from different EEG systems
-        raw_list = []
+        raw_dict = {}
 
         # create BrainVision raw
         if 'BrainVision' in self.stream_source['source']:
@@ -106,7 +106,7 @@ class Setup:
 
                     #create raw
                     bv_raw = mne.io.RawArray(bv_data, bv_info)
-                    raw_list.append(bv_raw)
+                    raw_dict['BrainVision'] = bv_raw
         else:
             print('BrainVision EEG stream not found')
 
@@ -144,11 +144,11 @@ class Setup:
 
             # create raw
             et_raw = mne.io.RawArray(et_data, et_info)
-            raw_list.append(et_raw)
+            raw_dict['ForeheadE-tattoo'] = et_raw
         else:
             print('Forehead E-tattoo stream not found')
-        assert raw_list is not [], 'source is not supported'
-        return raw_list # list of mne.io.Raw
+        assert raw_dict is not {}, 'source is not supported'
+        return raw_dict # dict of mne.io.Raw
 
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
         my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
