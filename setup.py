@@ -19,7 +19,7 @@ class Setup:
             self.raw = mne.io.read_raw_fif(data_path)
         elif data_type == 'vhdr':
             self.raw = mne.io.read_raw_brainvision(data_path)
-        elif data_type -- 'edf':
+        elif data_type == 'edf':
             self.raw = mne.io.read_raw_edf(data_path)
         elif data_type == 'xdf':
             # check if stream_source is claimed (dict {'source': list of str,'n_ch': list of int,'ch_name': list of list of str,'ch_type': list of list of str})
@@ -58,10 +58,10 @@ class Setup:
                     first_samp = stream['time_stamps'][0]
                 if stream['time_stamps'][-1] < last_samp:
                     last_samp = stream['time_stamps'][-1]
-                assert stim_stream is not None, 'STIM stream not found'
-                assert stim_stream is not [], 'EEG stream not found'
-                print('first time stamp is {}'.format(first_samp))
-                print('last time stamp is {}'.format(first_samp))
+        assert stim_stream is not None, 'STIM stream not found'
+        assert stim_stream is not [], 'EEG stream not found'
+        print('first time stamp is {}'.format(first_samp))
+        print('last time stamp is {}'.format(first_samp))
 
         # timestamps correction
         last_samp -= first_samp
@@ -83,10 +83,10 @@ class Setup:
 
         # seperate streams from different EEG systems
         raw_dict = {}
-
+        
         # create BrainVision raw
         if 'BrainVision' in self.stream_source['source']:
-            source_ind = self.stream_source['source'].index('LiveAmp')
+            source_ind = self.stream_source['source'].index('BrainVision')
             n_ch = self.stream_source['n_ch'][source_ind]
             for stream in eeg_stream:
                 stream_id = stream['info']['stream_id'] 
@@ -112,7 +112,7 @@ class Setup:
 
         # create Forehead E-tattoo raw
         if 'ForeheadE-tattoo' in self.stream_source['source']:
-            source_ind = self.stream_source['source'].index('LiveAmp')
+            source_ind = self.stream_source['source'].index('ForeheadE-tattoo')
             n_ch = self.stream_source['n_ch'][source_ind]
             et_stream = [0] * n_ch
             for stream in eeg_stream:
@@ -148,7 +148,7 @@ class Setup:
         else:
             print('Forehead E-tattoo stream not found')
         assert raw_dict is not {}, 'source is not supported'
-
+        
         # create annotation and set to raws
         onset = stim_stream['time_stamps']
         description = np.array([item for sub in stim_stream['time_series'] for item in sub])
@@ -159,7 +159,7 @@ class Setup:
         onset = np.delete(onset, ind_remove)
         duration = np.zeros(onset.shape)
         description = np.delete(description, ind_remove)
-        for key in raw_dict.keyskeys():
+        for key in raw_dict.keys():
             self.set_annotation(raw_dict[key], onset=onset, duration=duration, description=description)
             raw_dict[key]
         return raw_dict # dict of mne.io.Raw

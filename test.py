@@ -5,7 +5,7 @@ import numpy as np
 import re
 
 # load .xdf file
-fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S1/sub-P001_ses-S001_task-Default_run-001_eeg.xdf')
+fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S1/ECEO.xdf')
 streams, header = pyxdf.load_xdf(fname)
 
 # detect trigger/STIM stream id
@@ -119,11 +119,11 @@ for i in range(len(descriptions)):
 onsets = np.delete(onsets, ind_remove)
 descriptions = np.delete(descriptions, ind_remove)
 
-bv_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
-et_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
+# bv_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
+# et_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
 
 # plot mne.Raw
-bv_raw.plot(scalings=dict(eeg=100e-6), duration=5)
-et_raw.plot(scalings=dict(eeg=100e-6), duration=5)
+bv_raw.plot(scalings=dict(eeg=20e-6), duration=5, block=False)
+et_raw.plot(scalings=dict(eeg=20e-6), duration=5, block=True)
 
 mainloop()
