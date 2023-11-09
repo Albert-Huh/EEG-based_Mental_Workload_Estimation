@@ -1,4 +1,8 @@
 import os
+import mne
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
 from setup import Setup as setup
 import preprocessing
 
@@ -56,6 +60,69 @@ def main():
                     # save preprocessed raw as .fif
                     raw_name = key + '_' + file_name.replace('.xdf','.fif')
                     raw.save(os.path.join(data_folder_path, raw_name), overwrite=True)
+        if file_name.endswith('ECEO.fif'):
+            raw_path = os.path.join(data_folder_path, file_name)
+            raw = mne.io.read_raw_fif(raw_path)
+
+            # montage = mne.channels.read_custom_montage(montage_path)
+            if file_name.startswith('BrainVision'):
+                montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
+                sphere = None
+                montage.plot(show=False)
+            else:
+                montage = mne.channels.make_standard_montage('standard_1020', head_size='auto')
+                sphere = (0, 0.02, 0, 0.1)
+                montage.plot(show=False, sphere=sphere)
+            plt.show(block=True)
+            raw.set_montage(montage)
+
+            # bandpass filtering
+            filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
+            raw = filters.external_artifact_rejection(resample=False, notch=False)
+
+            raw.load_data()
+            custom_mapping = {'ec': 1, 'eo': 2}
+            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
+
+            # ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2)
+            # eog = ica.create_physiological_evoked()
+            # ica.perfrom_ICA()
+
+            epochs = mne.Epochs(raw=raw, events=events, event_id=event_dict, tmin=-10.0, tmax=10.0, preload=True, picks='eeg')
+            bv_epoch_eye_closed = epochs['ec']
+            bv_epoch_eye_open = epochs['eo']
+
+            #### Compute Time-Freq
+            freqs = np.logspace(*np.log10([1, 30]), num=160)
+            n_cycles = freqs / 2.  # different number of cycle per frequency
+            # cnorm = matplotlib.colors.TwoSlopeNorm(vmin=-1, vcenter=0, vmax=3)
+            # cmap=cnorm
+            # baseline=(-5.0, -1.0)
+
+            # BV Closed
+            power, itc = mne.time_frequency.tfr_morlet(bv_epoch_eye_closed, freqs=freqs, n_cycles=n_cycles, use_fft=True, return_itc=True, decim=1, n_jobs=1, picks='eeg')
+            power.plot(baseline=(-5.0, -0.1), combine='mean', mode='logratio', title='Closing Epoch Average Power')
+            # print(power.data)
+            # print(np.nanmax(power.data))
+            fig, axis = plt.subplots(1, 2, figsize=(7, 4))
+            cnorm = matplotlib.colors.TwoSlopeNorm(vmin=-0.275, vcenter=0, vmax=0.275)
+            power.plot_topomap(ch_type='eeg', tmin=-5, tmax=-0.5, fmin=8, fmax=13, baseline=(-5.0, -0.1), mode='logratio', axes=axis[0],sphere=sphere, show=False)
+            power.plot_topomap(ch_type='eeg', tmin=0.5, tmax=5, fmin=8, fmax=13, baseline=(-5.0, -0.1), mode='logratio', axes=axis[1], sphere=sphere, show=False)
+            mne.viz.tight_layout()
+            plt.show(block=True)
+
+            # BV Open
+            power, itc = mne.time_frequency.tfr_morlet(bv_epoch_eye_open, freqs=freqs, n_cycles=n_cycles, use_fft=True, return_itc=True, decim=1, n_jobs=1, picks='eeg')
+            power.plot(baseline=(0.1, 5), combine='mean', mode='logratio', title='Opening Epoch Average Power')
+            # power.plot([1], baseline=(-5.0, 0), mode='logratio', title=power.ch_names[1])
+            fig, axis = plt.subplots(1, 2, figsize=(7, 4))
+            cnorm = matplotlib.colors.TwoSlopeNorm(vmin=-0.225, vcenter=-0.1, vmax=0.025)
+            power.plot_topomap(ch_type='eeg', tmin=-5, tmax=-0.5, fmin=8, fmax=13, baseline=(0.1, 5), mode='logratio', axes=axis[0], sphere=sphere,show=False)
+            power.plot_topomap(ch_type='eeg', tmin=0.5, tmax=5, fmin=8, fmax=13, baseline=(0.1, 5), mode='logratio', axes=axis[1], sphere=sphere,show=False)
+            mne.viz.tight_layout()
+            plt.show(block=True)
+
+
 
 if __name__ == '__main__':
     main()
