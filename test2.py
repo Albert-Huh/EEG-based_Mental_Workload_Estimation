@@ -6,7 +6,7 @@ import re
 import preprocessing
 
 # load .xdf file
-fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S1/sub-P001_ses-S001_task-Default_run-001_eeg.xdf')
+fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/sub-P001_ses-S001_task-Default_run-001_eeg.xdf')
 streams, header = pyxdf.load_xdf(fname)
 
 # detect trigger/STIM stream id
@@ -23,9 +23,9 @@ stim_stream = None
 eeg_stream = []
 for stream in streams:
     stream_id = stream['info']['stream_id']
-    if stream['info']['stream_id'] in list_stim_id:
+    if stream['info']['stream_id'] in list_stim_id and np.any(stream['time_stamps']):
         stim_stream = stream
-    elif stream['info']['stream_id'] in list_eeg_id:
+    elif stream['info']['stream_id'] in list_eeg_id and np.any(stream['time_stamps']):
         eeg_stream.append(stream)
         # find first timestamp
         if stream['time_stamps'][0] > first_samp:
@@ -57,7 +57,7 @@ for stream in eeg_stream:
     print([stream['time_stamps'][0],stream['time_stamps'][-1]])
 
 # seperate streams from different EEG systems
-bv_ch_num = 18 # BrainVision system
+bv_ch_num = 4 # BrainVision system
 bv_stream = None
 liveamp_eeg_id = []
 
@@ -88,7 +88,7 @@ assert bv_stream is not None, 'BrainVision EEG stream not found'
 assert et_stream is not [], 'E-tattoo EEG stream not found'
 
 # manually create mne raw and info
-bv_ch_name = ['Fz', 'F3', 'F7', 'C3', 'T7', 'Pz', 'P3', 'P7', 'O1', 'Oz', 'O2', 'P8', 'P4', 'T8', 'C4', 'Cz', 'F8', 'F4']
+bv_ch_name = ['AF8','Fp2','Fp1','AF7']
 bv_ch_type = ['eeg'] * bv_ch_num
 bv_stream_len = bv_stream['time_series'].T.shape[1]
 bv_scale = 1e-6
