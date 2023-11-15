@@ -60,19 +60,22 @@ def main():
                     # save preprocessed raw as .fif
                     raw_name = key + '_' + file_name.replace('.xdf','.fif')
                     raw.save(os.path.join(data_folder_path, raw_name), overwrite=True)
+        
         if file_name.endswith('ECEO.fif'):
             raw_path = os.path.join(data_folder_path, file_name)
             raw = mne.io.read_raw_fif(raw_path)
-
+            raw.load_data()
+            custom_mapping = {'ec': 1, 'eo': 2}
+            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
             # montage = mne.channels.read_custom_montage(montage_path)
             if file_name.startswith('BrainVision'):
                 montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
                 sphere = None
-                montage.plot(show=False)
+                # montage.plot(show=False)
             else:
                 montage = mne.channels.make_standard_montage('standard_1020', head_size='auto')
                 sphere = (0, 0.02, 0, 0.1)
-                montage.plot(show=False, sphere=sphere)
+                # montage.plot(show=False, sphere=sphere)
             plt.show(block=True)
             raw.set_montage(montage)
 
@@ -80,12 +83,8 @@ def main():
             filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
             raw = filters.external_artifact_rejection(resample=False, notch=False)
 
-            raw.load_data()
-            custom_mapping = {'ec': 1, 'eo': 2}
-            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
-
             # ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2)
-            # eog = ica.create_physiological_evoked()
+            # eog = ica.create_physiological_evoked(eog_ch='vEOG')
             # ica.perfrom_ICA()
 
             epochs = mne.Epochs(raw=raw, events=events, event_id=event_dict, tmin=-10.0, tmax=10.0, preload=True, picks='eeg')
@@ -121,6 +120,44 @@ def main():
             power.plot_topomap(ch_type='eeg', tmin=0.5, tmax=5, fmin=8, fmax=13, baseline=(0.1, 5), mode='logratio', axes=axis[1], sphere=sphere,show=False)
             mne.viz.tight_layout()
             plt.show(block=True)
+
+        if file_name.endswith('_eeg.fif'):
+            raw_path = os.path.join(data_folder_path, file_name)
+            raw = mne.io.read_raw_fif(raw_path)
+            raw.load_data()
+            # raw.plot(scalings=dict(eeg=20e-6), duration=5, block=True)
+            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
+            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
+            # montage = mne.channels.read_custom_montage(montage_path)
+            if file_name.startswith('BrainVision'):
+                montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
+                sphere = None
+            else:
+                montage = mne.channels.make_standard_montage('standard_1020', head_size='auto')
+                sphere = (0, 0.02, 0, 0.1)
+            plt.show(block=True)
+            raw.set_montage(montage)
+
+            # bandpass filtering
+            filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
+            raw = filters.external_artifact_rejection(resample=False, notch=False)
+
+            # ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2)
+            # eog = ica.create_physiological_evoked(eog_ch='vEOG')
+            # ica.perfrom_ICA()
+
+            epochs = mne.Epochs(raw=raw, events=events, event_id=event_dict,event_repeated='drop', tmin=-0.5, tmax=2.0, preload=True, picks='eeg')
+            bv_0back = epochs['0']
+            bv_1back = epochs['1']
+            bv_2back = epochs['2']
+            bv_3back = epochs['3']
+            for epk in [bv_0back, bv_1back, bv_2back, bv_3back]:
+                # global field power and spatial plot
+                epk.plot_image(picks='eeg',combine='mean')
+                evk = epk.average()
+                evk.plot(gfp=True, spatial_colors=True)
+
+
 
 
 

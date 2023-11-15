@@ -127,10 +127,10 @@ class Indepndent_Component_Analysis:
 
         self.ica.exclude = list_exclude
     
-    def create_physiological_evoked(self, baseline=(-0.5, -0.2), verbose='warning'):
+    def create_physiological_evoked(self, baseline=(-0.5, -0.2), eog_ch='EOG',verbose='warning'):
 
         if self.find_eog_peaks == True:
-            eog_evoked = mne.preprocessing.create_eog_epochs(self.raw, ch_name='EOG', picks='eeg', 
+            eog_evoked = mne.preprocessing.create_eog_epochs(self.raw, ch_name=eog_ch, picks='eeg', 
             baseline=baseline, verbose=verbose).average()
             self.eog_evoked = eog_evoked
         if self.find_ecg_peaks == True:

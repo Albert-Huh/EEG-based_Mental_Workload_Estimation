@@ -48,10 +48,10 @@ class Setup:
         eeg_stream = []
         for stream in streams:
             stream_id = stream['info']['stream_id']
-            if stream['info']['stream_id'] in list_stim_id:
+            if stream['info']['stream_id'] in list_stim_id and np.any(stream['time_stamps']):
                 if len(stream['time_series']) != 0:
                     stim_stream = stream
-            elif stream['info']['stream_id'] in list_eeg_id:
+            elif stream['info']['stream_id'] in list_eeg_id and np.any(stream['time_stamps']):
                 eeg_stream.append(stream)
                 # find first timestamp
                 if stream['time_stamps'][0] > first_samp:
