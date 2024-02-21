@@ -6,7 +6,7 @@ import re
 import preprocessing
 
 # load .xdf file
-fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/sub-P001_ses-S001_task-Default_run-001_eeg.xdf')
+fname = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/motion/eye movements.xdf')
 streams, header = pyxdf.load_xdf(fname)
 
 # detect trigger/STIM stream id
@@ -88,48 +88,73 @@ assert bv_stream is not None, 'BrainVision EEG stream not found'
 assert et_stream is not [], 'E-tattoo EEG stream not found'
 
 # manually create mne raw and info
-bv_ch_name = ['AF8','Fp2','Fp1','AF7']
+bv_ch_name = ['BV-AF7','BV-Fp1','BV-Fp2','BV-AF8']
 bv_ch_type = ['eeg'] * bv_ch_num
 bv_stream_len = bv_stream['time_series'].T.shape[1]
 bv_scale = 1e-6
 bv_data = bv_stream['time_series'].T * bv_scale # get BrainVision stream data
-bv_sfreq = float(bv_stream['info']['nominal_srate'][0]) # get sampling frequnecy
+bv_sfreq = float(bv_stream['info']['effective_srate']) # get sampling frequnecy
 bv_info = mne.create_info(bv_ch_name, bv_sfreq, bv_ch_type) # create mne info
 bv_raw = mne.io.RawArray(bv_data, bv_info)
+# filter
+filters = preprocessing.Filtering(raw=bv_raw, l_freq=1, h_freq=30)
+bv_raw = filters.external_artifact_rejection(resample=False, notch=False)
+bv_raw = filters.resample(new_sfreq=150)
+# bv_raw.plot(scalings=dict(eeg=25e-6), duration=5, block=False)
+bv_data = bv_raw.get_data()
 
-et_ch_name = ['AF8','Fp2','Fp1','AF7','hEOG','vEOG']
+et_ch_name = ['ET-AF8','ET-Fp2','ET-Fp1','ET-AF7','hEOG','vEOG']
 et_ch_type = ['eeg','eeg','eeg','eeg','eog','eog']
 et_stream_len = et_stream[0]['time_series'].T.shape[1]
 for stream in et_stream: # find min sample size
     et_stream_len = min(et_stream_len,stream['time_series'].T.shape[1])
 et_scale = 1e-8
 et_data = np.ndarray(shape=(et_ch_num,et_stream_len), dtype=float)
+et_sfreq = float(et_stream[0]['info']['effective_srate'])
 for i in range(len(et_stream)):
     et_data[i] = et_stream[i]['time_series'].T[:,:et_stream_len] * et_scale
-et_sfreq = float(et_stream[0]['info']['nominal_srate'][0])
+    et_sfreq = min(et_sfreq, float(et_stream[i]['info']['effective_srate']))
 
 et_info = mne.create_info(et_ch_name, et_sfreq, et_ch_type) # ['AF8','Fp2','Fp1','AF7','hEOG','vEOG']
 et_raw = mne.io.RawArray(et_data, et_info)
+# filter
+filters = preprocessing.Filtering(raw=et_raw, l_freq=1, h_freq=30)
+et_raw = filters.external_artifact_rejection(resample=False, notch=False)
+et_raw = filters.resample(new_sfreq=150)
+# et_raw.plot(scalings=dict(eeg=25e-6), duration=5, block=True)
+et_data = et_raw.get_data()
+
+print(bv_data.shape)
+print(et_data.shape)
 
 # combined raw
-
-
-combined_stream_len = eeg_stream[0]['time_series'].T.shape[1]   
-for stream in eeg_stream: # find min sample size
-    combined_stream_len = min(combined_stream_len,stream['time_series'].T.shape[1])
-
+combined_stream_len = min(bv_data.shape[1],et_data.shape[1])-10
 cumbined_ch_num = bv_ch_num + et_ch_num
 cumbined_ch_name = bv_ch_name + et_ch_name
 cumbined_ch_type = bv_ch_type + et_ch_type
 cumbined_data = np.ndarray(shape=(cumbined_ch_num,combined_stream_len), dtype=float)
-for i in range(len(eeg_stream)):
-    if i == 0:
-        cumbined_data[:bv_ch_num] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * bv_scale
-    else:
-        cumbined_data[i+bv_ch_num-1] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * et_scale
-sfreq = 250
-combined_info = mne.create_info(cumbined_ch_name, sfreq, cumbined_ch_type) # ['AF8','Fp2','Fp1','AF7','hEOG','vEOG']
-raw = mne.io.RawArray(cumbined_data, combined_info)
+cumbined_data[:bv_ch_num] = bv_data[:,:combined_stream_len]
+cumbined_data[bv_ch_num:] = et_data[:,10:combined_stream_len+10]
+sfreq = bv_raw.info['sfreq'] # get sampling frequnecy
+combined_info = mne.create_info(cumbined_ch_name, sfreq, cumbined_ch_type)
+combined_raw = mne.io.RawArray(cumbined_data, combined_info)
+
+# combined_stream_len = et_stream[0]['time_series'].T.shape[1]
+# for stream in eeg_stream: # find min sample size
+#     combined_stream_len = min(combined_stream_len,stream['time_series'].T.shape[1])
+
+# cumbined_ch_num = bv_ch_num + et_ch_num
+# cumbined_ch_name = bv_ch_name + et_ch_name
+# cumbined_ch_type = bv_ch_type + et_ch_type
+# cumbined_data = np.ndarray(shape=(cumbined_ch_num,combined_stream_len), dtype=float)
+# for i in range(len(eeg_stream)):
+#     if i == 0:
+#         cumbined_data[:bv_ch_num] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * bv_scale
+#     else:
+#         cumbined_data[i+bv_ch_num-1] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * et_scale
+# sfreq = 250
+# combined_info = mne.create_info(cumbined_ch_name, sfreq, cumbined_ch_type) # ['AF8','Fp2','Fp1','AF7','hEOG','vEOG']
+# raw = mne.io.RawArray(cumbined_data, combined_info)
 
 # generate and add timestamped annotations to RawArray
 onsets = stim_stream['time_stamps']
@@ -141,17 +166,15 @@ for i in range(len(descriptions)):
 onsets = np.delete(onsets, ind_remove)
 descriptions = np.delete(descriptions, ind_remove)
 
-# bv_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
-# et_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
-raw.annotations.append(onsets, [0] * len(onsets), descriptions)
+combined_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
 
-# filter
-filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
-raw = filters.external_artifact_rejection(resample=False, notch=False)
+# # filter
+# filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
+# raw = filters.external_artifact_rejection(resample=False, notch=False)
 
 # plot mne.Raw
 # bv_raw.plot(scalings=dict(eeg=20e-6), duration=5, block=False)
 # et_raw.plot(scalings=dict(eeg=20e-6), duration=5, block=True)
-raw.plot(scalings=dict(eeg=25e-6), duration=5, block=True)
+combined_raw.plot(scalings=dict(eeg=25e-6), duration=5, block=True)
 
 mainloop()

@@ -32,8 +32,9 @@ class Setup:
     
     def read_xdf(self):
         # load .xdf file
-        streams, header = pyxdf.load_xdf(self.data_path)
-
+        streams, header = pyxdf.load_xdf(self.data_path, dejitter_timestamps=True, 
+                                         jitter_break_threshold_seconds=0.04, 
+                                         jitter_break_threshold_samples=50)
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
         list_stim_id = list_stim_id + pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
@@ -54,31 +55,30 @@ class Setup:
             elif stream['info']['stream_id'] in list_eeg_id and np.any(stream['time_stamps']):
                 eeg_stream.append(stream)
                 # find first timestamp
-                if stream['time_stamps'][0] > first_samp:
-                    first_samp = stream['time_stamps'][0]
-                if stream['time_stamps'][-1] < last_samp:
-                    last_samp = stream['time_stamps'][-1]
-        assert stim_stream is not None, 'STIM stream not found'
+                first_samp = max(stream['time_stamps'][0], first_samp)
+                last_samp = min(stream['time_stamps'][-1], last_samp)
+        if stim_stream == None:
+            print('STIM stream not found')
         assert stim_stream is not [], 'EEG stream not found'
         print('first time stamp is {}'.format(first_samp))
         print('last time stamp is {}'.format(first_samp))
 
         # timestamps correction
-        last_samp -= first_samp
-        stim_stream['time_stamps'] -= first_samp
-        for stream in eeg_stream:
-            stream['time_stamps'] -= first_samp
+        # last_samp -= first_samp
+        if stim_stream != None:
+            stim_stream['time_stamps'] -= first_samp
 
         # truncate EEG streams between first and last timestamps
         strat_ind = 0
         end_ind = 0
         for stream in eeg_stream:
+            nominal_srate = float(stream['info']['nominal_srate'][0])
             for i in range(len(stream['time_stamps'])):
-                if stream['time_stamps'][i] <= 0.0:
-                    strat_ind = i+1
-                if stream['time_stamps'][i] <= last_samp:
+                if abs(stream['time_stamps'][i]-first_samp) <= 1/nominal_srate/2:
+                    strat_ind = i
+                if abs(stream['time_stamps'][i]-last_samp) <= 1/nominal_srate/2:
                     end_ind = i
-            stream['time_stamps'] = stream['time_stamps'][strat_ind:end_ind+1]
+            stream['time_stamps'] = stream['time_stamps'][strat_ind:end_ind+1] - first_samp
             stream['time_series'] = stream['time_series'][strat_ind:end_ind+1,:]
 
         # seperate streams from different EEG systems
@@ -95,18 +95,21 @@ class Setup:
 
                     # create bv_data
                     stream['time_series'] = stream['time_series'][:,:n_ch]
-                    scale = 1e-6
-                    bv_data = stream['time_series'].T * scale # get BrainVision stream data
+                    bv_scale = 1e-6
+                    bv_data = stream['time_series'].T * bv_scale # get BrainVision stream data
 
                     # create bv_info
                     ch_name = self.stream_source['ch_name'][source_ind] # get BrainVision stream channel name
                     ch_type = self.stream_source['ch_type'][source_ind] # get BrainVision stream channel type
-                    sfreq = float(stream['info']['nominal_srate'][0]) # get sampling frequnecy
+                    sfreq = stream['info']['effective_srate'] # get sampling frequnecy
+                    # sfreq = float(stream['info']['nominal_srate'][0]) # get sampling frequnecy
                     bv_info = mne.create_info(ch_name, sfreq, ch_type) # create mne info
 
                     #create raw
                     bv_raw = mne.io.RawArray(bv_data, bv_info)
                     raw_dict['BrainVision'] = bv_raw
+                else:
+                    print('BrainVision EEG stream is not not found')
         else:
             print('BrainVision EEG stream not found')
 
@@ -131,15 +134,21 @@ class Setup:
             et_stream_len = et_stream[0]['time_series'].T.shape[1]
             for stream in et_stream: # find min sample size
                 et_stream_len = min(et_stream_len,stream['time_series'].T.shape[1])
-            scale = 1e-8
+            VREF = 2.5
+            PGA_gain = 24
+            lsb = (2* VREF) / (PGA_gain * 2 ** 24)
+            et_scale = lsb
             et_data = np.ndarray(shape=(n_ch,et_stream_len), dtype=float)
+            srate = np.ndarray(shape=(n_ch,1), dtype=float)
             for i in range(n_ch):
-                et_data[i] = et_stream[i]['time_series'].T[:,:et_stream_len] * scale
-
+                et_data[i] = et_stream[i]['time_series'].T[:,:et_stream_len] * et_scale
+                srate[i] = et_stream[i]['info']['effective_srate']
             # create et_info
-            ch_name = self.stream_source['ch_name'][source_ind] # get BrainVision stream channel name
-            ch_type = self.stream_source['ch_type'][source_ind] # get BrainVision stream channel type
-            sfreq = float(et_stream[0]['info']['nominal_srate'][0]) # get sampling frequnecy
+            ch_name = self.stream_source['ch_name'][source_ind] # get ForeheadE-tattoo stream channel name
+            ch_type = self.stream_source['ch_type'][source_ind] # get ForeheadE-tattoo stream channel type
+            sfreq = min(srate)
+            # sfreq = stream['info']['effective_srate'] # get sampling frequnecy
+            # sfreq = float(et_stream[0]['info']['nominal_srate'][0]) # get sampling frequnecy
             et_info = mne.create_info(ch_name, sfreq, ch_type) # create mne info
 
             # create raw
@@ -147,21 +156,46 @@ class Setup:
             raw_dict['ForeheadE-tattoo'] = et_raw
         else:
             print('Forehead E-tattoo stream not found')
+
+        # create Combined raw
+        if 'Combined' in self.stream_source['source']:
+            if 'BrainVision' in raw_dict.keys() and 'ForeheadE-tattoo' in raw_dict.keys():
+                source_ind = self.stream_source['source'].index('Combined')
+                combined_stream_len = eeg_stream[0]['time_series'].T.shape[1]   
+                for stream in eeg_stream: # find min sample size
+                    combined_stream_len = min(combined_stream_len,stream['time_series'].T.shape[1])
+
+                bv_ch_num = 4
+                et_ch_num = 6
+                cumbined_ch_num = self.stream_source['n_ch'][source_ind]
+                cumbined_ch_name = self.stream_source['ch_name'][source_ind]
+                cumbined_ch_type = self.stream_source['ch_type'][source_ind]
+                cumbined_data = np.ndarray(shape=(cumbined_ch_num,combined_stream_len), dtype=float)
+                for i in range(len(eeg_stream)):
+                    if i == 0:
+                        cumbined_data[:bv_ch_num] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * bv_scale
+                    else:
+                        cumbined_data[i+bv_ch_num-1] = eeg_stream[i]['time_series'].T[:,:combined_stream_len] * et_scale
+                sfreq = bv_info['sfreq'] # get sampling frequnecy
+                combined_info = mne.create_info(cumbined_ch_name, sfreq, cumbined_ch_type)
+                combined_raw = mne.io.RawArray(cumbined_data, combined_info)
+                raw_dict['Combined'] = combined_raw
         assert raw_dict is not {}, 'source is not supported'
         
         # create annotation and set to raws
-        onset = stim_stream['time_stamps']
-        description = np.array([item for sub in stim_stream['time_series'] for item in sub])
-        ind_remove = []
-        for i in range(len(description)):
-            if description[i] == '':
-                ind_remove.append(i)
-        onset = np.delete(onset, ind_remove)
-        duration = np.zeros(onset.shape)
-        description = np.delete(description, ind_remove)
-        for key in raw_dict.keys():
-            self.set_annotation(raw_dict[key], onset=onset, duration=duration, description=description)
-            raw_dict[key]
+        if stim_stream != None:
+            onset = stim_stream['time_stamps']
+            description = np.array([item for sub in stim_stream['time_series'] for item in sub])
+            ind_remove = []
+            for i in range(len(description)):
+                if description[i] == '':
+                    ind_remove.append(i)
+            onset = np.delete(onset, ind_remove)
+            duration = np.zeros(onset.shape)
+            description = np.delete(description, ind_remove)
+            for key in raw_dict.keys():
+                self.set_annotation(raw_dict[key], onset=onset, duration=duration, description=description)
+                raw_dict[key]
         return raw_dict # dict of mne.io.Raw
 
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):

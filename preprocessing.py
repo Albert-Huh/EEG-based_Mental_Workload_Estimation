@@ -6,11 +6,11 @@ import mne
 matplotlib.use('TkAgg')
 
 class Filtering:
-    def __init__(self, raw, l_freq, h_freq, nf_freqs=(60,120)):
+    def __init__(self, raw, l_freq, h_freq, nf_freqs=(60,120), picks='eeg'):
         # filter parameters
         self.raw = raw.copy()
         self.sfreq = raw.info['sfreq']
-        self.picks = ['eeg', 'eog']
+        self.picks = picks
         self.l_freq = l_freq
         self.h_freq = h_freq
         self.nf_freqs = nf_freqs
@@ -20,8 +20,9 @@ class Filtering:
         
         if cutoff_freq == None:
             cutoff_freq = self.l_freq
+        picks=self.picks
         filt_raw = self.raw.filter(
-            l_freq=cutoff_freq, h_freq=None, picks=self.picks, method=filt_type,
+            l_freq=cutoff_freq, h_freq=None, picks=picks, method=filt_type,
             iir_params=iir_params, verbose=verbose)
         if show_filt_params == True:
             # check the filter parameter
@@ -36,8 +37,9 @@ class Filtering:
         
         if cutoff_freq == None:
             cutoff_freq = self.h_freq
+        picks=self.picks
         filt_raw = self.raw.filter(
-            l_freq=None, h_freq=cutoff_freq, picks=self.picks, method=filt_type,
+            l_freq=None, h_freq=cutoff_freq, picks=picks, method=filt_type,
             iir_params=iir_params, verbose=verbose)
         if show_filt_params == True:
             # check the filter parameter
@@ -49,11 +51,11 @@ class Filtering:
 
     def notch(self, target_freqs=None, notch_wdith=None, filt_type='fir', 
         iir_params=None, verbose='warning'):
-        
         if target_freqs == None:
             target_freqs = self.nf_freqs
+        picks=self.picks
         filt_raw = self.raw.notch_filter(
-            freqs=target_freqs, picks=self.picks,
+            freqs=target_freqs, picks=picks,
             method=filt_type, iir_params=iir_params, verbose=verbose)
         return filt_raw
 
@@ -71,11 +73,11 @@ class Filtering:
     def bandpass(self, cutoff_freq=None, filt_type='fir', iir_params=None,
         show_filt_params = False, verbose='warning'):
 
+        picks=self.picks
         if cutoff_freq == None:
             cutoff_freq = [self.l_freq, self.h_freq]
-        filt_raw = self.raw.filter(
-            l_freq=cutoff_freq[0], h_freq=cutoff_freq[1], picks=self.picks, method=filt_type,
-            iir_params=iir_params, verbose=verbose)
+        filt_raw = self.raw.filter(l_freq=cutoff_freq[0], h_freq=cutoff_freq[1], picks=picks, method=filt_type, 
+                                   iir_params=iir_params, verbose=verbose)
         if show_filt_params == True:
             # check the filter parameter
             filter_params = mne.filter.create_filter(
@@ -149,7 +151,15 @@ class Indepndent_Component_Analysis:
         reject_by_annotation=True, measure='correlation', plot_fig=True, verbose='warning'):
 
         if self.find_eog_peaks == True:
-            eog_indices, eog_scores = self.ica.find_bads_eog(self.raw, ch_name='EOG', 
+            for file_name in self.raw.ch_names:
+                eog_ch = None
+                if file_name.endswith('EOG'):
+                    eog_ch = file_name
+                    if eog_ch.startswith('h'): # replace 'hEOG' with 'vEOG' or 'EOG'
+                        eog_ch = file_name
+                else:
+                    eog_ch = None
+            eog_indices, eog_scores = self.ica.find_bads_eog(self.raw, ch_name=eog_ch, 
                 threshold=eog_treshold, start=None, stop=None, l_freq=1, h_freq=10, 
                 reject_by_annotation=reject_by_annotation, measure=measure, verbose=verbose)
             print(eog_indices, eog_scores)
