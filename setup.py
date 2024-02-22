@@ -35,8 +35,10 @@ class Setup:
         streams, header = pyxdf.load_xdf(self.data_path, dejitter_timestamps=True, 
                                          jitter_break_threshold_seconds=0.04, 
                                          jitter_break_threshold_samples=50)
-        #stream tiebreak
+        #fix bad xdf streams
         streams = self._xdf_tiebreak(streams)
+        streams = self._drop_bad_stream(streams)
+
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
         list_stim_id = list_stim_id + pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
@@ -45,20 +47,20 @@ class Setup:
         list_eeg_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
 
         # define STIM and EEG streams and get first and last timestamps
-        first_samp = 0.0
-        last_samp = 1000000000
+        first_samp = min(stream['time_stamps'][0] for stream in streams)
+        last_samp = max(stream['time_stamps'][-1] for stream in streams)
         stim_stream = None
         eeg_stream = []
         for stream in streams:
             stream_id = stream['info']['stream_id']
-            if stream['info']['stream_id'] in list_stim_id and np.any(stream['time_stamps']):
+            if stream['info']['stream_id'] in list_stim_id:
                 if len(stream['time_stamps']) != 0:
                     stim_stream = stream
-            elif stream['info']['stream_id'] in list_eeg_id and np.any(stream['time_stamps']):
+            elif stream['info']['stream_id'] in list_eeg_id: # and np.any(stream['time_stamps'])
                 eeg_stream.append(stream)
                 # find first timestamp
-                first_samp = max(stream['time_stamps'][0], first_samp)
-                last_samp = min(stream['time_stamps'][-1], last_samp)
+                first_samp = max(stream['time_stamps'][0], first_samp) if abs(stream['time_stamps'][0]-first_samp) < 1 else min(stream['time_stamps'][0], first_samp)
+                last_samp = min(stream['time_stamps'][-1], last_samp) if abs(stream['time_stamps'][-1]-last_samp) < 1 else max(stream['time_stamps'][-1], last_samp)
         if stim_stream == None:
             print('STIM stream not found')
         assert eeg_stream is not [], 'EEG stream not found'
@@ -211,20 +213,37 @@ class Setup:
         for stream in streams:
             names.append(stream['info']['name'][0])
         
-        print('Resolving streams...', end='')
+        print('Resolving streams...', end='\n')
 
         winning_streams = []
         unique_names = np.unique(names)
         for name in unique_names:
-            candidate_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{"name": name}])
+            candidate_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'name': name}])
             candidate_streams = [stream for stream in streams if stream['info']['stream_id'] in candidate_ids]
             stream_len = [len(stream['time_series']) for stream in candidate_streams]
             max_stream_len = max(stream_len)
             winner_idx = stream_len.index(max_stream_len)
             winning_streams.append(candidate_streams[winner_idx])
-
         return winning_streams
     
+    def _drop_bad_stream(self, streams):
+        # drop empty stream
+        for stream in streams:
+            if np.any(stream['time_stamps']) == False:
+                streams.remove(stream)
+        eeg_stream_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
+        eeg_streams = [stream for stream in streams if stream['info']['stream_id'] in eeg_stream_ids and np.any(stream['time_stamps'])]
+        first_samp = min(stream['time_stamps'][0] for stream in eeg_streams)
+        last_samp = max(stream['time_stamps'][-1] for stream in eeg_streams)
+        for stream in eeg_streams:
+            # drop stream with siginificant packet lost
+            if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 10:
+                streams.remove(stream)
+            # drop disconnected stream
+            if np.abs(stream['time_stamps'][0]-first_samp) > 10 or np.abs(stream['time_stamps'][-1]-last_samp) > 10:
+                streams.remove(stream)
+        return streams
+
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
         my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
         raw.set_annotations(my_annot)

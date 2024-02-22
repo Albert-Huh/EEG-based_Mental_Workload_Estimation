@@ -17,7 +17,7 @@ def prep_data():
     raw_data_list = os.listdir(data_folder_path)
 
     for file_name in raw_data_list:
-        if file_name.endswith('003_eeg.xdf'):
+        if file_name.endswith('eeg.xdf'):
             preprocessed = False
             for name in raw_data_list:
                 if file_name.replace('.xdf','.fif') in name:
