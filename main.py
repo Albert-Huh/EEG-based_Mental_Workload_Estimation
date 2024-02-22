@@ -44,15 +44,14 @@ def prep_data():
                 for key in raw_dict.keys():
                     raw = raw_dict[key]
                     # bandpass filtering
-                    filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=None, picks=['eeg','eog'])
-                    raw = filters.external_artifact_rejection(resample=False, notch=True)
+                    filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=50, picks=['eeg','eog'])
+                    raw = filters.external_artifact_rejection(resample=False, notch=False)
                     # filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=50, picks='eeg')
                     # raw = filters.external_artifact_rejection(resample=False, notch=False)
                     # if 'eog' in ch_type:
                     #     filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=10, picks='eog')
                     #     raw = filters.external_artifact_rejection(resample=False, notch=False)
-                    raw.set_eeg_reference('average')
-
+                    raw = filters.resample(new_sfreq=50)
                     # interactively annotate bad signal
                     interactive_annot = raw_setup.annotate_interactively(raw=raw)
                     print(interactive_annot)
@@ -102,14 +101,11 @@ def n_back_analysis():
             # bandpass filtering
             # filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
             # raw = filters.external_artifact_rejection(resample=False, notch=False)
-            filters = preprocessing.Filtering(raw=raw, l_freq=None, h_freq=100, picks=['eeg','eog'])
-            reconst_raw = filters.external_artifact_rejection(resample=False, notch=True)
-            ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=96)
+            ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=97)
             reconst_raw = ica.perfrom_ICA()
-            reconst_raw = filters.resample(new_sfreq=50)
 
             tmin, tmax = -0.2, 1.8
-            epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=tmin-0.3, tmax=tmax+0.3, preload=True, picks='eeg', baseline=None)
+            epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=tmin-0.5, tmax=tmax+0.5, preload=True, picks='eeg', baseline=None)
             # n0_back = epochs['0']
             # n1_back = epochs['1']
             # n2_back = epochs['2']
@@ -122,9 +118,8 @@ def n_back_analysis():
             epochs_list.append(epochs)
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
-    all_epochs = all_epochs['0', '1', '2', '3']
     # epoch analysis
-    freqs = np.arange(1, 25)  # frequencies from 1-25Hz
+    freqs = np.arange(2, 36)  # frequencies from 2-35Hz
     vmin, vmax = -1, 1.5  # set min and max ERDS values in plot
     baseline = (-0.2, 0)  # baseline interval (in s)
     cnorm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)  # min, center & max ERDS
@@ -134,8 +129,8 @@ def n_back_analysis():
     )  # for cluster test
 
     tfr = mne.time_frequency.tfr_multitaper(
-        all_epochs,
-        freqs=raw,
+        epochs,
+        freqs=freqs,
         n_cycles=freqs,
         use_fft=True,
         return_itc=False,
@@ -149,7 +144,7 @@ def n_back_analysis():
         # select desired epochs for visualization
         tfr_ev = tfr[event]
         fig, axes = plt.subplots(
-            1, 5, figsize=(16, 4), gridspec_kw={"width_ratios": [10, 10, 10, 10, 1]}
+            1, 4, figsize=(12, 4), gridspec_kw={"width_ratios": [10, 10, 10, 1]}
         )
         for ch, ax in enumerate(axes[:-1]):  # for each channel
             # positive clusters
@@ -202,7 +197,7 @@ def n_back_analysis():
     df["band"] = df["band"].cat.remove_unused_categories()
 
     # Order channels for plotting:
-    df["channel"] = df["channel"].cat.reorder_categories(("AF8", "Fp2", "Fp1", "AF7"), ordered=True)
+    df["channel"] = df["channel"].cat.reorder_categories(("C3", "Cz", "C4"), ordered=True)
 
     g = sns.FacetGrid(df, row="band", col="channel", margin_titles=True)
     g.map(sns.lineplot, "time", "value", "condition", n_boot=10)
@@ -214,34 +209,6 @@ def n_back_analysis():
     g.set_titles(col_template="{col_name}", row_template="{row_name}")
     g.add_legend(ncol=2, loc="lower center")
     g.fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.08)
-
-
-    df_mean = (
-        df.query("time > 1")
-        .groupby(["condition", "epoch", "band", "channel"], observed=False)[["value"]]
-        .mean()
-        .reset_index()
-    )
-
-    g = sns.FacetGrid(
-        df_mean, col="condition", col_order=["0", "1", "2", "3"], margin_titles=True
-    )
-    g = g.map(
-        sns.violinplot,
-        "channel",
-        "value",
-        "band",
-        cut=0,
-        palette="deep",
-        order=["AF8", "Fp2", "Fp1", "AF7"],
-        hue_order=freq_bands_of_interest,
-        linewidth=0.5,
-    ).add_legend(ncol=4, loc="lower center")
-
-    g.map(plt.axhline, **axline_kw)
-    g.set_axis_labels("", "ERDS")
-    g.set_titles(col_template="{col_name}-Back", row_template="{row_name}")
-    g.fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.3)
 
     plt.show()
 
