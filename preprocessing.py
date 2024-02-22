@@ -198,15 +198,15 @@ class Indepndent_Component_Analysis:
         self.setup_ICA()
         # self.visualize_ICA_components() # Comment while debugging
         eog_indices, _, ecg_indices, _ = self.find_physiological_artifacts(
-            eog_treshold=0.6, ecg_treshold='auto', reject_by_annotation=True,
+            eog_treshold='auto', ecg_treshold='auto', reject_by_annotation=True,
             measure='correlation', plot_fig=False, verbose='warning')
         print(eog_indices + ecg_indices)
         self.visualize_ICA_components()
         self.exclude_ica(eog_indices + ecg_indices)
-        self.ica.apply(self.raw)
-        print('flag')
         exclude = list(input('Components to exclude: ').split(','))
         self.ica.exclude = [int(x) for x in exclude]
         print(self.ica.exclude)
         self.ica.plot_overlay(self.raw, exclude=self.ica.exclude, picks='eeg')
-        # return self.raw
+        reconst_raw = self.raw.copy()
+        self.ica.apply(reconst_raw)
+        return reconst_raw

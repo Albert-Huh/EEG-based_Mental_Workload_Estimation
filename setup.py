@@ -183,6 +183,11 @@ class Setup:
         assert raw_dict is not {}, 'source is not supported'
         
         # create annotation and set to raws
+        for stream in eeg_stream:
+            print(stream['info']['name'])
+            print(stream['time_stamps'].shape)
+            if stream['time_stamps'].shape[0]>0:
+                print(stream['time_stamps'][0])
         if stim_stream != None:
             onset = stim_stream['time_stamps']
             description = np.array([item for sub in stim_stream['time_series'] for item in sub])
@@ -194,6 +199,7 @@ class Setup:
             duration = np.zeros(onset.shape)
             description = np.delete(description, ind_remove)
             for key in raw_dict.keys():
+                print(key)
                 self.set_annotation(raw_dict[key], onset=onset, duration=duration, description=description)
                 raw_dict[key]
         return raw_dict # dict of mne.io.Raw

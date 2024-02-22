@@ -9,7 +9,7 @@ import preprocessing
 new_rc_params = {'text.usetex': False, "svg.fonttype": 'none'}
 mpl.rcParams.update(new_rc_params)
 
-def preprocessing():
+def prep_data():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
     subject_ind = '1'
@@ -17,7 +17,7 @@ def preprocessing():
     raw_data_list = os.listdir(data_folder_path)
 
     for file_name in raw_data_list:
-        if file_name.endswith('.xdf'):
+        if file_name.endswith('003_eeg.xdf'):
             preprocessed = False
             for name in raw_data_list:
                 if file_name.replace('.xdf','.fif') in name:
@@ -76,30 +76,55 @@ def n_back_analysis():
     events_list = []
 
     for file_name in raw_data_list:
-        if file_name.endswith('tattoo_ECEO.fif'):
-                    raw_path = os.path.join(data_folder_path, file_name)
-                    raw = mne.io.read_raw_fif(raw_path)
-                    raw.load_data()
-                    custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
-                    events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
-                    montage = mne.channels.read_custom_montage(montage_path)
-                    if file_name.startswith('BrainVision'):
-                        montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
-                        sphere = None
-                        # montage.plot(show=False)
-                    else:
-                        montage = mne.channels.make_standard_montage('standard_1020', head_size='auto')
-                        sphere = (0, 0.02, 0, 0.1)
-                        # montage.plot(show=False, sphere=sphere)
-                    # plt.show(block=True)
-                    raw.set_montage(montage)
+        if file_name.endswith('eeg.fif'):
+            raw_path = os.path.join(data_folder_path, file_name)
+            raw = mne.io.read_raw_fif(raw_path)
+            raw.load_data()
+            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
+            # custom_mapping = {'0-Back': 0, '1-Back': 1, '2-Back': 2, '3-Back': 3, 'fixation': 10, 'character response': 100, 'location response': 101}
+            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
+            montage = mne.channels.read_custom_montage(montage_path)
+            if file_name.startswith('BrainVision'):
+                montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
+                sphere = None
+                # montage.plot(show=False)
+            else:
+                montage = mne.channels.make_standard_montage('standard_1020', head_size='auto')
+                sphere = (0, 0.02, 0, 0.1)
+                # montage.plot(show=False, sphere=sphere)
+            # plt.show(block=True)
+            raw.set_montage(montage)
 
-                    # bandpass filtering
-                    filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
-                    raw = filters.external_artifact_rejection(resample=False, notch=False)
-                    # ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2)
-                    # ica.perfrom_ICA()
+            # bandpass filtering
+            # filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
+            # raw = filters.external_artifact_rejection(resample=False, notch=False)
+            ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=92)
+            reconst_raw = ica.perfrom_ICA()
+
+            epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=-0.2, tmax=1.8, preload=True, picks='eeg')
+            # n0_back = epochs['0']
+            # n1_back = epochs['1']
+            # n2_back = epochs['2']
+            # n3_back = epochs['3']
+            # for epk in [n0_back, n1_back, n2_back, n3_back]:
+            #     # global field power and spatial plot
+            #     epk.plot_image(picks='eeg',combine='mean')
+            #     evk = epk.average()
+            #     evk.plot(gfp=True, spatial_colors=True)
+            epochs_list.append(epochs)
+    # concatenate all epochs from different trials
+    all_epochs = mne.concatenate_epochs(epochs_list)
+    # epoch analysis
+    all_n0_back = all_epochs['0'].average()
+    all_n1_back = all_epochs['1'].average()
+    all_n2_back = all_epochs['2'].average()
+    all_n3_back = all_epochs['3'].average()
+    for evk in [all_n0_back, all_n1_back, all_n2_back, all_n3_back]:
+        # global field power and spatial plot
+        evk.plot(gfp=True, spatial_colors=True, ylim=dict(eeg=[-4, 4]))
+        # spatial plot + topomap
+        evk.plot_joint()
 
 if __name__ == '__main__':
-    preprocessing()
+    prep_data()
     n_back_analysis()
