@@ -103,6 +103,7 @@ def n_back_analysis():
             # raw = filters.external_artifact_rejection(resample=False, notch=False)
             ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=97)
             reconst_raw = ica.perfrom_ICA()
+            reconst_raw.set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
 
             tmin, tmax = -0.2, 1.8
             epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=tmin-0.3, tmax=tmax+0.3, preload=True, picks='eeg', baseline=None)
@@ -130,7 +131,7 @@ def n_back_analysis():
     )  # for cluster test
 
     tfr = mne.time_frequency.tfr_multitaper(
-        epochs,
+        all_epochs,
         freqs=freqs,
         n_cycles=freqs,
         use_fft=True,
