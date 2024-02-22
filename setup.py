@@ -35,6 +35,8 @@ class Setup:
         streams, header = pyxdf.load_xdf(self.data_path, dejitter_timestamps=True, 
                                          jitter_break_threshold_seconds=0.04, 
                                          jitter_break_threshold_samples=50)
+        #stream tiebreak
+        streams = self._xdf_tiebreak(streams)
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
         list_stim_id = list_stim_id + pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'stim'}])
@@ -50,7 +52,7 @@ class Setup:
         for stream in streams:
             stream_id = stream['info']['stream_id']
             if stream['info']['stream_id'] in list_stim_id and np.any(stream['time_stamps']):
-                if len(stream['time_series']) != 0:
+                if len(stream['time_stamps']) != 0:
                     stim_stream = stream
             elif stream['info']['stream_id'] in list_eeg_id and np.any(stream['time_stamps']):
                 eeg_stream.append(stream)
@@ -59,7 +61,7 @@ class Setup:
                 last_samp = min(stream['time_stamps'][-1], last_samp)
         if stim_stream == None:
             print('STIM stream not found')
-        assert stim_stream is not [], 'EEG stream not found'
+        assert eeg_stream is not [], 'EEG stream not found'
         print('first time stamp is {}'.format(first_samp))
         print('last time stamp is {}'.format(first_samp))
 
@@ -204,6 +206,25 @@ class Setup:
                 raw_dict[key]
         return raw_dict # dict of mne.io.Raw
 
+    def _xdf_tiebreak(self, streams):
+        names = []
+        for stream in streams:
+            names.append(stream['info']['name'][0])
+        
+        print('Resolving streams...', end='')
+
+        winning_streams = []
+        unique_names = np.unique(names)
+        for name in unique_names:
+            candidate_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{"name": name}])
+            candidate_streams = [stream for stream in streams if stream['info']['stream_id'] in candidate_ids]
+            stream_len = [len(stream['time_series']) for stream in candidate_streams]
+            max_stream_len = max(stream_len)
+            winner_idx = stream_len.index(max_stream_len)
+            winning_streams.append(candidate_streams[winner_idx])
+
+        return winning_streams
+    
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
         my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
         raw.set_annotations(my_annot)
