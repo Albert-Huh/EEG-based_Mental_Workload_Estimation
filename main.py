@@ -15,7 +15,7 @@ mpl.rcParams.update(new_rc_params)
 def prep_data():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '1'
+    subject_ind = '2'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -55,6 +55,11 @@ def prep_data():
                     # interactively annotate bad signal
                     interactive_annot = raw_setup.annotate_interactively(raw=raw)
                     print(interactive_annot)
+
+                    if file_name.endswith('run-003_eeg.xdf'):
+                        t_start = float(input('t_start: '))
+                        t_end = float(input('t_end: '))
+                        raw = raw.crop(tmin=t_start, tmax=t_end)
                     # save preprocessed raw as .fif
                     raw_name = key + '_' + file_name.replace('.xdf','.fif')
                     raw.save(os.path.join(data_folder_path, raw_name), overwrite=True)
@@ -65,7 +70,7 @@ def eye_oc():
 def n_back_analysis():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '1'
+    subject_ind = '2'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -83,6 +88,7 @@ def n_back_analysis():
             raw_path = os.path.join(data_folder_path, file_name)
             raw = mne.io.read_raw_fif(raw_path)
             raw.load_data()
+            raw.plot(block=True)
             custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
             # custom_mapping = {'0-Back': 0, '1-Back': 1, '2-Back': 2, '3-Back': 3, 'fixation': 10, 'character response': 100, 'location response': 101}
             events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
@@ -97,14 +103,14 @@ def n_back_analysis():
                 # montage.plot(show=False, sphere=sphere)
             # plt.show(block=True)
             raw.set_montage(montage)
-
+            
             # bandpass filtering
             # filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
             # raw = filters.external_artifact_rejection(resample=False, notch=False)
             ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=97)
             reconst_raw = ica.perfrom_ICA()
             reconst_raw.set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
-
+            reconst_raw.plot(block=True)
             tmin, tmax = -0.2, 1.8
             epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=tmin-0.3, tmax=tmax+0.3, preload=True, picks='eeg', baseline=None)
             # n0_back = epochs['0']

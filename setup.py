@@ -32,7 +32,7 @@ class Setup:
     
     def read_xdf(self):
         # load .xdf file
-        streams, header = pyxdf.load_xdf(self.data_path, dejitter_timestamps=True, 
+        streams, header = pyxdf.load_xdf(self.data_path, dejitter_timestamps=True, handle_clock_resets=False,
                                          jitter_break_threshold_seconds=0.04, 
                                          jitter_break_threshold_samples=50)
         #fix bad xdf streams
@@ -46,9 +46,7 @@ class Setup:
         # detect the EEG stream id
         list_eeg_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
 
-        # define STIM and EEG streams and get first and last timestamps
-        first_samp = min(stream['time_stamps'][0] for stream in streams)
-        last_samp = max(stream['time_stamps'][-1] for stream in streams)
+        # define STIM and EEG streams
         stim_stream = None
         eeg_stream = []
         for stream in streams:
@@ -58,14 +56,22 @@ class Setup:
                     stim_stream = stream
             elif stream['info']['stream_id'] in list_eeg_id: # and np.any(stream['time_stamps'])
                 eeg_stream.append(stream)
-                # find first timestamp
-                first_samp = max(stream['time_stamps'][0], first_samp) if abs(stream['time_stamps'][0]-first_samp) < 1 else min(stream['time_stamps'][0], first_samp)
-                last_samp = min(stream['time_stamps'][-1], last_samp) if abs(stream['time_stamps'][-1]-last_samp) < 1 else max(stream['time_stamps'][-1], last_samp)
+                
         if stim_stream == None:
             print('STIM stream not found')
         assert eeg_stream is not [], 'EEG stream not found'
+
+        #get first and last timestamps
+        first_samp = min(stream['time_stamps'][0] for stream in eeg_stream)
+        last_samp = max(stream['time_stamps'][-1] for stream in eeg_stream)
+        for stream in eeg_stream:
+        # find first timestamp
+            first_samp = max(stream['time_stamps'][0], first_samp) if abs(stream['time_stamps'][0]-first_samp) < 2 else min(stream['time_stamps'][0], first_samp)
+            last_samp = min(stream['time_stamps'][-1], last_samp) if abs(stream['time_stamps'][-1]-last_samp) < 2 else max(stream['time_stamps'][-1], last_samp)
+            print(stream['info']['name'])
+            print(stream['time_stamps'][0:3],stream['time_stamps'][-3:])
         print('first time stamp is {}'.format(first_samp))
-        print('last time stamp is {}'.format(first_samp))
+        print('last time stamp is {}'.format(last_samp))
 
         # timestamps correction
         # last_samp -= first_samp
@@ -210,9 +216,36 @@ class Setup:
 
     def _xdf_tiebreak(self, streams):
         names = []
+        fig, ax = plt.subplots(nrows=2)
+        fig.suptitle('time_stamps')
         for stream in streams:
             names.append(stream['info']['name'][0])
-        
+            
+            '''ax[0].plot(range(len(stream['time_stamps'])),stream['time_stamps'], label=stream['info']['name'][0])
+            ax[1].plot(range(len(np.diff(stream['time_stamps']))),np.diff(stream['time_stamps']), label=stream['info']['name'][0])
+            print(stream['time_stamps'][0:3],stream['time_stamps'][268:272],stream['time_stamps'][-3:])'''
+
+            # S2 timestamps debugging
+            '''
+            fig, ax = plt.subplots(nrows=1)
+            fig.suptitle('time_stamps '+stream['info']['name'][0])
+            ax.plot(range(len(stream['time_stamps'])),stream['time_stamps'], color='black')
+            ax.set_xlabel('Index')
+            ax.set_ylabel('Stamp')
+            plt.show()
+            print(stream['time_stamps'][0:3],stream['time_stamps'][269:271],stream['time_stamps'][-3:])
+            debug
+            '''
+        '''ax[0].plot(range(len(streams[4]['time_stamps'])),streams[4]['time_stamps'], label=streams[4]['info']['name'][0])
+        ax[1].plot(range(len(np.diff(streams[4]['time_stamps']))),np.diff(streams[4]['time_stamps']), label=streams[4]['info']['name'][0])
+        ax[0].set_xlabel('Index')
+        ax[0].set_ylabel('Stamp')
+        ax[1].set_xlabel('Index')
+        ax[1].set_ylabel('Stamp Diff')
+        ax[0].legend()
+        ax[1].legend()
+        plt.show()
+        debug'''
         print('Resolving streams...', end='\n')
 
         winning_streams = []
@@ -239,6 +272,7 @@ class Setup:
             # drop stream with siginificant packet lost
             if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 10:
                 streams.remove(stream)
+                continue
             # drop disconnected stream
             if np.abs(stream['time_stamps'][0]-first_samp) > 10 or np.abs(stream['time_stamps'][-1]-last_samp) > 10:
                 streams.remove(stream)
