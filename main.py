@@ -15,12 +15,12 @@ mpl.rcParams.update(new_rc_params)
 def prep_data():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '2'
+    subject_ind = '1'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
     for file_name in raw_data_list:
-        if file_name.endswith('eeg.xdf'):
+        if file_name.endswith('.xdf'):
             preprocessed = False
             for name in raw_data_list:
                 if file_name.replace('.xdf','.fif') in name:
@@ -56,7 +56,7 @@ def prep_data():
                     interactive_annot = raw_setup.annotate_interactively(raw=raw)
                     print(interactive_annot)
 
-                    if file_name.endswith('run-003_eeg.xdf'):
+                    if file_name.endswith('P002_ses-S003_task-Default_run-003_eeg.xdf'):
                         t_start = float(input('t_start: '))
                         t_end = float(input('t_end: '))
                         raw = raw.crop(tmin=t_start, tmax=t_end)
@@ -70,7 +70,7 @@ def eye_oc():
 def n_back_analysis():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '2'
+    subject_ind = '3'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -259,4 +259,5 @@ def n_back_analysis():
 
 if __name__ == '__main__':
     prep_data()
-    n_back_analysis()
+    eye_oc()
+    # n_back_analysis()

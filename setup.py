@@ -216,8 +216,8 @@ class Setup:
 
     def _xdf_tiebreak(self, streams):
         names = []
-        fig, ax = plt.subplots(nrows=2)
-        fig.suptitle('time_stamps')
+        '''fig, ax = plt.subplots(nrows=2)
+        fig.suptitle('time_stamps')'''
         for stream in streams:
             names.append(stream['info']['name'][0])
             
