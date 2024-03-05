@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import TwoSlopeNorm
 from setup import Setup as setup
+from setup import N_back_report as nback
 import preprocessing
 
 new_rc_params = {'text.usetex': False, "svg.fonttype": 'none'}
@@ -15,7 +16,7 @@ mpl.rcParams.update(new_rc_params)
 def prep_data():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '1'
+    subject_ind = '5'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -23,7 +24,7 @@ def prep_data():
         if file_name.endswith('.xdf'):
             preprocessed = False
             for name in raw_data_list:
-                if file_name.replace('.xdf','.fif') in name:
+                if file_name.replace('.xdf','_raw.fif') in name:
                     preprocessed = True
                     print(file_name, 'already has a preprocessed .fif file.')
             if preprocessed == False and not file_name.startswith('training'):
@@ -44,14 +45,19 @@ def prep_data():
                 for key in raw_dict.keys():
                     raw = raw_dict[key]
                     # bandpass filtering
-                    filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=50, picks=['eeg','eog'])
-                    raw = filters.external_artifact_rejection(resample=False, notch=False)
-                    # filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=50, picks='eeg')
+                    # filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=50, picks=['eeg','eog'])
                     # raw = filters.external_artifact_rejection(resample=False, notch=False)
-                    # if 'eog' in ch_type:
-                    #     filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=10, picks='eog')
-                    #     raw = filters.external_artifact_rejection(resample=False, notch=False)
+                    ''' comment out ' to process raw
+                    filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=50, picks='eeg')
+                    raw = filters.external_artifact_rejection(resample=False, notch=False)
+                    if 'eog' in ch_type:
+                        filters = preprocessing.Filtering(raw=raw, l_freq=0.01, h_freq=10, picks='eog')
+                        raw = filters.external_artifact_rejection(resample=False, notch=False)
+
+                    resmaple raw
                     raw = filters.resample(new_sfreq=50)
+                    '''
+                    
                     # interactively annotate bad signal
                     interactive_annot = raw_setup.annotate_interactively(raw=raw)
                     print(interactive_annot)
@@ -60,8 +66,13 @@ def prep_data():
                         t_start = float(input('t_start: '))
                         t_end = float(input('t_end: '))
                         raw = raw.crop(tmin=t_start, tmax=t_end)
+                    elif file_name.endswith('P005_ses-S001_task-Default_run-003_eeg.xdf'):
+                        continue
+                        t_start = float(input('t_start: '))
+                        t_end = float(input('t_end: '))
+                        raw = raw.crop(tmin=t_start, tmax=t_end)
                     # save preprocessed raw as .fif
-                    raw_name = key + '_' + file_name.replace('.xdf','.fif')
+                    raw_name = key + '_' + file_name.replace('.xdf','_raw.fif')
                     raw.save(os.path.join(data_folder_path, raw_name), overwrite=True)
 
 def eye_oc():
@@ -84,14 +95,11 @@ def n_back_analysis():
     events_list = []
 
     for file_name in raw_data_list:
-        if file_name.endswith('eeg.fif'):
+        if file_name.endswith('eeg_raw.fif'):
             raw_path = os.path.join(data_folder_path, file_name)
             raw = mne.io.read_raw_fif(raw_path)
             raw.load_data()
-            raw.plot(block=True)
-            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
-            # custom_mapping = {'0-Back': 0, '1-Back': 1, '2-Back': 2, '3-Back': 3, 'fixation': 10, 'character response': 100, 'location response': 101}
-            events, event_dict = mne.events_from_annotations(raw, event_id=custom_mapping)
+            # raw.plot(block=True)
             montage = mne.channels.read_custom_montage(montage_path)
             if file_name.startswith('BrainVision'):
                 montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
@@ -105,14 +113,42 @@ def n_back_analysis():
             raw.set_montage(montage)
             
             # bandpass filtering
-            # filters = preprocessing.Filtering(raw=raw, l_freq=1, h_freq=30)
-            # raw = filters.external_artifact_rejection(resample=False, notch=False)
-            ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=97)
+            filters = preprocessing.Filtering(raw=raw, l_freq=4, h_freq=50)
+            raw = filters.external_artifact_rejection(resample=False, notch=False)
+
+            '''ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=90)
             reconst_raw = ica.perfrom_ICA()
-            reconst_raw.set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
             reconst_raw.plot(block=True)
-            tmin, tmax = -0.2, 1.8
-            epochs = mne.Epochs(raw=reconst_raw, events=events, event_id=event_dict,event_repeated='drop', tmin=tmin-0.3, tmax=tmax+0.3, preload=True, picks='eeg', baseline=None)
+            debug'''
+
+            
+            # perform regression.
+            raw = raw.set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
+            model_plain = mne.preprocessing.EOGRegression(picks="eeg", picks_artifact="eog").fit(raw)
+            # fig = model_plain.plot(vlim=(None, None))  # regression coefficients as topomap
+            # plt.show()
+
+            raw_clean_plain = model_plain.apply(raw)
+
+            # Show the corrected data
+            # raw_clean_plain.plot(block=True)
+            
+            # resmaple raw
+            raw_clean_plain = raw_clean_plain.resample(sfreq=60)
+            raw_clean_plain.load_data()
+            annot = raw_clean_plain.annotations
+            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
+            events, event_dict = mne.events_from_annotations(raw_clean_plain, event_id=custom_mapping)
+            events = mne.pick_events(events, exclude=[10, 100,101])
+            event_dict = {key: event_dict[key] for key in event_dict if key not in ['fixation', 'response_alpha','response_pos']}
+            
+            tmin, tmax = -0.3, 1.2
+            reject = dict(eeg=40e-6)      # unit: V (EEG channels)
+            epochs = mne.Epochs(raw=raw_clean_plain, events=events, event_id=event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
+            baseline_tmin, baseline_tmax = -0.3, 0
+            baseline = (baseline_tmin, baseline_tmax)
+            epochs.apply_baseline(baseline)
+            
             # n0_back = epochs['0']
             # n1_back = epochs['1']
             # n2_back = epochs['2']
@@ -123,13 +159,32 @@ def n_back_analysis():
             #     evk = epk.average()
             #     evk.plot(gfp=True, spatial_colors=True)
             epochs_list.append(epochs)
+            events_list.append(events)
+            # for i in range(len(annot.onset)):
+            #     print(annot.onset[i],events[i,0],annot.description[i])
+            # raw_clean_plain.plot(block=True)
+            # epochs.plot(block=True)
+            # debug
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
     all_epochs = all_epochs['0', '1', '2', '3']
+    
     # epoch analysis
-    freqs = np.arange(1, 25)  # frequencies from 1-25Hz
-    vmin, vmax = -1, 1.5  # set min and max ERDS values in plot
-    baseline = (-0.2, 0)  # baseline interval (in s)
+    all_n0_back = all_epochs['0'].average()
+    all_n1_back = all_epochs['1'].average()
+    all_n2_back = all_epochs['2'].average()
+    all_n3_back = all_epochs['3'].average()
+    debug
+    for evk in [all_n0_back, all_n1_back, all_n2_back, all_n3_back]:
+        # global field power and spatial plot
+        evk.plot(gfp=True, spatial_colors=True, ylim=dict(eeg=[-4, 4]))
+        # # spatial plot + topomap
+        # evk.plot_joint()
+    
+    
+    freqs = np.arange(5, 30)  # frequencies from 5-30Hz
+    vmin, vmax = -2, 2  # set min and max ERDS values in plot
+    baseline = (-0.5, 0)  # baseline interval (in s)
     cnorm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)  # min, center & max ERDS
 
     kwargs = dict(
@@ -145,7 +200,7 @@ def n_back_analysis():
         average=False,
         decim=2,
     )
-    tfr.crop(tmin, tmax).apply_baseline(baseline, mode="percent")
+    tfr.crop(tmin, tmax).apply_baseline(baseline, mode="average")
     event_ids = {'0': 0, '1': 1, '2': 2, '3': 3}
 
     for event in event_ids:
@@ -212,11 +267,11 @@ def n_back_analysis():
     axline_kw = dict(color="black", linestyle="dashed", linewidth=0.5, alpha=0.5)
     g.map(plt.axhline, y=0, **axline_kw)
     g.map(plt.axvline, x=0, **axline_kw)
-    g.set(ylim=(-1.5, 1.5))
+    g.set(ylim=(-1.5, 2.5))
     g.set_axis_labels("Time (s)", "ERDS")
     g.set_titles(col_template="{col_name}", row_template="{row_name}")
     g.add_legend(ncol=2, loc="lower center")
-    g.fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.08)
+    g.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.08)
 
     df_mean = (
         df.query("time > 1")
@@ -243,21 +298,12 @@ def n_back_analysis():
     g.map(plt.axhline, **axline_kw)
     g.set_axis_labels("", "ERDS")
     g.set_titles(col_template="{col_name}-Back", row_template="{row_name}")
-    g.fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.3)
+    g.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.3)
 
     plt.show()
 
-    all_n0_back = all_epochs['0'].average()
-    all_n1_back = all_epochs['1'].average()
-    all_n2_back = all_epochs['2'].average()
-    all_n3_back = all_epochs['3'].average()
-    for evk in [all_n0_back, all_n1_back, all_n2_back, all_n3_back]:
-        # global field power and spatial plot
-        evk.plot(gfp=True, spatial_colors=True, ylim=dict(eeg=[-4, 4]))
-        # spatial plot + topomap
-        evk.plot_joint()
 
 if __name__ == '__main__':
     prep_data()
     eye_oc()
-    # n_back_analysis()
+    n_back_analysis()

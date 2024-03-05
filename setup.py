@@ -264,18 +264,21 @@ class Setup:
         for stream in streams:
             if np.any(stream['time_stamps']) == False:
                 streams.remove(stream)
+                print(stream['info']['name'][0] + ' removed: empty stream')
         eeg_stream_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'EEG'}])
         eeg_streams = [stream for stream in streams if stream['info']['stream_id'] in eeg_stream_ids and np.any(stream['time_stamps'])]
         first_samp = min(stream['time_stamps'][0] for stream in eeg_streams)
         last_samp = max(stream['time_stamps'][-1] for stream in eeg_streams)
         for stream in eeg_streams:
             # drop stream with siginificant packet lost
-            if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 10:
+            if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 0.1*float(stream['info']['nominal_srate'][0]):
                 streams.remove(stream)
+                print(stream['info']['name'][0] + ' removed: siginificant packet lost')
                 continue
             # drop disconnected stream
             if np.abs(stream['time_stamps'][0]-first_samp) > 10 or np.abs(stream['time_stamps'][-1]-last_samp) > 10:
                 streams.remove(stream)
+                print(stream['info']['name'][0] + ' removed: disconnected stream')
         return streams
 
     def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
@@ -295,8 +298,21 @@ class Setup:
         interactive_annot = raw.annotations
         return interactive_annot # class mne.Annotations
     
-    def read_report_txt(self, reprot_path: str):
-        file = open(reprot_path, 'r')
+class N_back_report:
+    def __init__(self,report_path: str = None):
+        assert report_path is not None, ' report_path is not defined'
+        if not isinstance(report_path, str):
+            raise TypeError
+        self.report_path = report_path
+        # get the list of indication stings to extract data
+        key_nasa_tlx = 'NASA TLX Responses: '
+        key_criterion = 'Correct, Missed, False Alarm'
+        # key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx]
+        self.key_list = [key_nasa_tlx, key_criterion] # list of str
+        self.lines = self.read_report_txt(report_path)
+    
+    def read_report_txt(self, report_path: str):
+        file = open(report_path, 'r')
         # read .txt file line by line
         content = list(file)
         lines = []
@@ -306,47 +322,71 @@ class Setup:
         file.close()
         return lines # list of str
 
-    def get_nback_key(self):
+    def get_nback_key(self, full: bool = False):
         # get the list of indication stings to extract data
-        key_alpha_solution = 'Alpha Answer '
-        key_alpha_user = 'User Input Alpha: '
-        key_position_solution = 'Position Answer '
-        key_position_user = 'User Input Position: '
-        key_nasa_tlx = 'NASA TLX Responses: '
-        key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx]
+        key_list = self.key_list
+        if full == True:
+            key_alpha_solution = 'Alpha Answer: '
+            key_alpha_user = 'User Input Alpha: '
+            key_position_solution = 'Position Answer: '
+            key_position_user = 'User Input Position: '
+            key_nasa_tlx = 'NASA TLX Responses: '
+            key_criterion = 'Correct, Missed, False Alarm'
+            key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx, key_criterion]
         return key_list # list of str
 
-    def get_nback_report_data(self, lines: list, key_list: list):
+    def get_nback_report_data(self, lines: list=None, key_list: list=None):
+        if lines == None:
+            lines = self.lines
+        if key_list == None:
+            key_list = self.key_list
         # get the list of nback sequence
         nback_sequence = lines[5] # Sequence is on line 6
         sequence = [int(s) for s in list(nback_sequence) if s.isdigit()]
         # create report dict data object
         report = {}
-        report['nback_sequence'] = sequence
-        report['sol_alphabet'] = []
-        report['sol_position'] = []
-        report['user_alphabet'] = []
-        report['user_position'] = []
-        report['nasa_tlx'] = []
-        key_ind = ['nback_sequence','sol_alphabet','sol_position','user_alphabet','user_position','nasa_tlx']
-
-        line_idx = 0
-        flag = 0
-        line_timestamps = []
-        timestamps = []
-        # loop through the file line by line
-        for line in lines:
-            # checking string is present in line or not
-            str_idx = 0
-            for string in key_list:
-                if string in line:
-                    lst = line.split('[',1)[1].replace(']','').split(', ') # split str to a list of str
-                    lst = [s == 'True' for s in lst] # convert list of str to list of booleen
-                    report[key_ind[str_idx]].append(lst)
-                str_idx += 1
-            line_idx += 1
-        if flag == 0:
-            print('The key string for stim timestamps were not found')
+        if len(key_list) > 2:
+            report['nback_sequence'] = sequence
+            report['sol_alphabet'] = []
+            report['sol_position'] = []
+            report['user_alphabet'] = []
+            report['user_position'] = []
+            report['nasa_tlx'] = []
+            report['criterion'] = []
+            keys = ['nback_sequence','sol_alphabet','sol_position','user_alphabet','user_position','nasa_tlx','criterion']
+            # loop through the file line by line
+            for line_idx, line in enumerate(lines):
+                # checking string is present in line or not
+                for key_idx, string in enumerate(key_list):
+                    if string in line:
+                        if string == "NASA TLX Responses: ":
+                            str_tlx = line.split(': ',1)[1] # split str to a list of str
+                            tlx = eval(str_tlx)
+                            report['nasa_tlx'].append(tlx)
+                        elif string == "Correct, Missed, False Alarm":
+                            str_criterion = lines[line_idx+1]
+                            criterion = [int(s) for s in str_criterion if s.isdigit()]
+                            report['criterion'].append(criterion)
+                        else:
+                            lst = line.split('[',1)[1].replace(']','').split(', ') # split str to a list of str
+                            lst = [s == 'True' for s in lst] # convert list of str to list of booleen
+                            report[keys[key_idx+1]].append(lst)
         else:
-            print('The key string for stim timestamps were found in line', line_timestamps)
+            report['nback_sequence'] = sequence
+            report['nasa_tlx'] = []
+            report['criterion'] = []
+            keys = ['nback_sequence','nasa_tlx','criterion']
+            # loop through the file line by line
+            for line_idx, line in enumerate(lines):
+                # checking string is present in line or not
+                for string in key_list:
+                    if string in line:
+                        if string == "NASA TLX Responses: ":
+                            str_tlx = line.split(': ',1)[1] # split str to a list of str
+                            tlx = eval(str_tlx)
+                            report['nasa_tlx'].append(tlx)
+                        elif string == "Correct, Missed, False Alarm":
+                            str_criterion = lines[line_idx+1]
+                            criterion = [int(s) for s in str_criterion if s.isdigit()]
+                            report['criterion'].append(criterion)
         return report # dict of list
