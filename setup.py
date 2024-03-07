@@ -305,13 +305,9 @@ class N_back_report:
             raise TypeError
         self.report_path = report_path
         # get the list of indication stings to extract data
-        key_nasa_tlx = 'NASA TLX Responses: '
-        key_criterion = 'Correct, Missed, False Alarm'
-        # key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx]
-        self.key_list = [key_nasa_tlx, key_criterion] # list of str
         self.lines = self.read_report_txt(report_path)
     
-    def read_report_txt(self, report_path: str):
+    def read_report_txt(report_path: str):
         file = open(report_path, 'r')
         # read .txt file line by line
         content = list(file)
@@ -322,9 +318,8 @@ class N_back_report:
         file.close()
         return lines # list of str
 
-    def get_nback_key(self, full: bool = False):
+    def get_nback_key(full: bool = False):
         # get the list of indication stings to extract data
-        key_list = self.key_list
         if full == True:
             key_alpha_solution = 'Alpha Answer: '
             key_alpha_user = 'User Input Alpha: '
@@ -333,13 +328,13 @@ class N_back_report:
             key_nasa_tlx = 'NASA TLX Responses: '
             key_criterion = 'Correct, Missed, False Alarm'
             key_list = [key_alpha_solution, key_position_solution, key_alpha_user, key_position_user, key_nasa_tlx, key_criterion]
+        else:
+            key_nasa_tlx = 'NASA TLX Responses: '
+            key_criterion = 'Correct, Missed, False Alarm'
+            key_list = [key_nasa_tlx, key_criterion] # list of str
         return key_list # list of str
 
-    def get_nback_report_data(self, lines: list=None, key_list: list=None):
-        if lines == None:
-            lines = self.lines
-        if key_list == None:
-            key_list = self.key_list
+    def get_nback_report_data(lines: list, key_list: list):
         # get the list of nback sequence
         nback_sequence = lines[5] # Sequence is on line 6
         sequence = [int(s) for s in list(nback_sequence) if s.isdigit()]
