@@ -67,6 +67,7 @@ def prep_data():
                         t_end = float(input('t_end: '))
                         raw = raw.crop(tmin=t_start, tmax=t_end)
                     elif file_name.endswith('P005_ses-S001_task-Default_run-003_eeg.xdf'):
+                        raw.plot(block=True)
                         continue
                         t_start = float(input('t_start: '))
                         t_end = float(input('t_end: '))
@@ -81,7 +82,7 @@ def eye_oc():
 def n_back_analysis():
     ############### IMPORT DATA & SIGNAL PROCESSING ###############
     # list of raw data files in local data folder
-    subject_ind = '3'
+    subject_ind = '5'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_ind)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -89,17 +90,15 @@ def n_back_analysis():
     montage_path = os.path.join(os.getcwd(), 'data/Workspaces_Montages/passive electrodes/BrainCap','BrainCap 64 Channel','BC-64.bvef')
     # initilize epoch and event lists
     epochs_list = []
-    theta_epochs_list = []
-    alpha_epochs_list = []
-    beta_epochs_list = []
     events_list = []
+    report_list = []
 
     for file_name in raw_data_list:
         if file_name.endswith('eeg_raw.fif'):
             raw_path = os.path.join(data_folder_path, file_name)
             raw = mne.io.read_raw_fif(raw_path)
             raw.load_data()
-            # raw.plot(block=True)
+            raw.plot(block=True)
             montage = mne.channels.read_custom_montage(montage_path)
             if file_name.startswith('BrainVision'):
                 montage = mne.channels.make_standard_montage('easycap-M1', head_size='auto')
@@ -113,7 +112,7 @@ def n_back_analysis():
             raw.set_montage(montage)
             
             # bandpass filtering
-            filters = preprocessing.Filtering(raw=raw, l_freq=4, h_freq=50)
+            filters = preprocessing.Filtering(raw=raw, l_freq=4, h_freq=60)
             raw = filters.external_artifact_rejection(resample=False, notch=False)
 
             '''ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=90)
@@ -131,12 +130,29 @@ def n_back_analysis():
             raw_clean_plain = model_plain.apply(raw)
 
             # Show the corrected data
-            # raw_clean_plain.plot(block=True)
+            raw_clean_plain.plot(block=True)
             
             # resmaple raw
-            raw_clean_plain = raw_clean_plain.resample(sfreq=60)
+            new_sfreq = 60
+            raw_clean_plain = raw_clean_plain.resample(sfreq=new_sfreq)
             raw_clean_plain.load_data()
+
+            # remove overlapping events and get reaction time
+            remv_idx = []
+            reaction_time = []
             annot = raw_clean_plain.annotations
+            for i in range(len(annot.onset)):
+                del_t = annot.onset[i+1] - annot.onset[i]
+                # get overlapping events idx
+                if del_t < 1/new_sfreq:
+                    remv_idx.append(i)
+                else:
+                    # get reaction time
+                    if annot.description[i].isdigit() and annot.description[i+1].startswith('response_'):
+                        reaction_time.append(del_t)
+            # remove overlapping events
+            raw_clean_plain.annotations.delete(remv_idx)
+
             custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
             events, event_dict = mne.events_from_annotations(raw_clean_plain, event_id=custom_mapping)
             events = mne.pick_events(events, exclude=[10, 100,101])
@@ -165,6 +181,13 @@ def n_back_analysis():
             # raw_clean_plain.plot(block=True)
             # epochs.plot(block=True)
             # debug
+        
+        if file_name.endswith('.txt'):
+            report_path = os.path.join(data_folder_path, file_name)
+            lines = nback.read_report_txt(report_path=report_path)
+            key_list = nback.get_nback_key()
+            report = nback.get_nback_report_data(lines, key_list)
+            report_list.append(report)
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
     all_epochs = all_epochs['0', '1', '2', '3']
@@ -304,6 +327,6 @@ def n_back_analysis():
 
 
 if __name__ == '__main__':
-    prep_data()
-    eye_oc()
+    # prep_data()
+    # eye_oc()
     n_back_analysis()
