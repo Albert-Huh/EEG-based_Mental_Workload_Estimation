@@ -214,7 +214,7 @@ class Setup:
                 raw_dict[key]
         return raw_dict # dict of mne.io.Raw
 
-    def _xdf_tiebreak(self, streams):
+    def _xdf_tiebreak(streams):
         names = []
         '''fig, ax = plt.subplots(nrows=2)
         fig.suptitle('time_stamps')'''
@@ -259,7 +259,7 @@ class Setup:
             winning_streams.append(candidate_streams[winner_idx])
         return winning_streams
     
-    def _drop_bad_stream(self, streams):
+    def _drop_bad_stream(streams):
         # drop empty stream
         for stream in streams:
             if np.any(stream['time_stamps']) == False:
@@ -281,17 +281,17 @@ class Setup:
                 print(stream['info']['name'][0] + ' removed: disconnected stream')
         return streams
 
-    def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
+    def set_annotation(raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
         my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
         raw.set_annotations(my_annot)
 
-    def get_annotation_info(self, raw: mne.io.Raw):
+    def get_annotation_info(raw: mne.io.Raw):
         onset = raw.annotations.onset
         duration = raw.annotations.duration
         description = raw.annotations.description
         return onset, duration, description # ndarray or float, float, str
 
-    def annotate_interactively(self, raw: mne.io.Raw):
+    def annotate_interactively(raw: mne.io.Raw):
         fig = raw.plot()
         fig.fake_keypress('a')
         plt.show(block=True)
