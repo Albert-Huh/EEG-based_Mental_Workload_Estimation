@@ -262,7 +262,7 @@ def n_back_analysis():
     all_n3_back = all_epochs['3']
     epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back]
     for epc in epcs:
-        epc.plot_image(picks="eeg", combine=None)
+        epc.plot_image(picks="eeg", combine="std")
 
     # evoked analysis
     evokeds_list = [all_n0_back.average(), all_n1_back.average(), all_n2_back.average(), all_n3_back.average()]
@@ -274,8 +274,10 @@ def n_back_analysis():
     for combine in ("mean", "median", "gfp", custom_func):
         mne.viz.plot_compare_evokeds(evks, picks="eeg", combine=combine)
 
-  
-    freqs = np.arange(3, 50)  # frequencies from 4-30Hz
+    for evk in evokeds_list:
+        evk.plot(picks="eeg")
+    '''
+    freqs = np.arange(3, 50)  # frequencies from 3-50Hz
     vmin, vmax = -1, 1  # set min and max ERDS values in plot
     baseline = (-0.1, 0)  # baseline interval (in s)
     cnorm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)  # min, center & max ERDS
@@ -327,7 +329,7 @@ def n_back_analysis():
                 mask_style="mask",
             )
 
-            ax.set_title(epochs.ch_names[ch], fontsize=10)
+            ax.set_title(all_epochs.ch_names[ch], fontsize=10)
             ax.axvline(0, linewidth=1, color="black", linestyle=":")  # event
             if ch != 0:
                 ax.set_ylabel("")
@@ -394,6 +396,7 @@ def n_back_analysis():
     g.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.3)
 
     plt.show()
+    '''
 
 
 if __name__ == '__main__':
