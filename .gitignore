@@ -30,3 +30,9 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Image file
+*.svg
+*.png
+*.emf
+*.jpg

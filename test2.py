@@ -178,3 +178,37 @@ combined_raw.annotations.append(onsets, [0] * len(onsets), descriptions)
 combined_raw.plot(scalings=dict(eeg=25e-6), duration=5, block=True)
 
 mainloop()
+
+
+'''
+    # specific frequency bands
+    FREQ_BANDS = {"theta": [4.0, 8.0],
+                "alpha": [8.0, 13.0],
+                "beta": [13.0, 30.0]}
+    evk_power = []
+    for evk in evokeds_list:
+        spectrum = evk.compute_psd(method='multitaper', fmin=4, fmax=30, tmin=None, tmax=None, normalization='length')
+        psds, freqs = spectrum.get_data(return_freqs=True)
+        
+        X = []
+        # Raw of Evoked type
+        if len(psds.shape) == 2:
+            for fmin, fmax in FREQ_BANDS.values():
+                band_power = psds[:, (freqs >= fmin) & (freqs < fmax)].mean(axis=-1)
+                X.append(band_power)
+            grand_avg_band_power = []
+            for power in X:
+                grand_avg_power = np.mean(power) # average across channels
+                grand_avg_band_power.append(grand_avg_power)
+        # Epochs type
+        elif len(psds.shape) == 3:
+            for fmin, fmax in FREQ_BANDS.values():
+                band_power = psds[:, :, (freqs >= fmin) & (freqs < fmax)].mean(axis=-1)
+                X.append(band_power)
+            grand_avg_band_power = []
+            for power in X:
+                grand_avg_power = np.mean(power, axis=1)#.reshape(1,4)
+                grand_avg_band_power.append(grand_avg_power)
+
+        evk_power.append(grand_avg_band_power)
+'''

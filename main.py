@@ -83,7 +83,7 @@ def eye_oc():
 ############### SIGNAL PROCESSING & N-BACK ANALYSIS ###############
 def n_back_analysis():
     # list of raw data files in local data folder
-    subject_idx = '5'
+    subject_idx = '1'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -120,8 +120,9 @@ def n_back_analysis():
             
             ############### Signal Processing ###############
             # bandpass filtering
-            filters = preprocessing.Filtering(raw=raw, l_freq=4, h_freq=60)
+            filters = preprocessing.Filtering(raw=raw, l_freq=3, h_freq=50)
             raw = filters.external_artifact_rejection(resample=False, notch=False)
+            # raw.plot(block=False, title='raw')
 
             '''ica = preprocessing.Indepndent_Component_Analysis(raw, n_components=raw.info['nchan']-2, seed=90)
             reconst_raw = ica.perfrom_ICA()
@@ -129,26 +130,44 @@ def n_back_analysis():
             debug'''
 
             # perform regression to correct EOG artifacts
-            raw = raw.set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
-            model_plain = mne.preprocessing.EOGRegression(picks="eeg", picks_artifact="eog").fit(raw)
+            '''# EOGRegression without refference EEG
+            raw_eeg = raw[:4, :][0]
+            raw_eog = raw[4:, :][0]
+            b = np.linalg.inv(raw_eog @ raw_eog.T) @ raw_eog @ raw_eeg.T
+            # b = np.linalg.solve(raw_eog @ raw_eog.T, raw_eog @ raw_eeg.T)
+            print(b.shape)
+            print(b.T)
+            eeg_corrected = (raw_eeg.T - raw_eog.T @ b).T
+            raw_clean1 = raw.copy()
+            raw_clean1._data[:4, :] = eeg_corrected
+            raw_clean1.plot(block=False, title='raw_clean1')
+            '''
+
+            # mne EOGRegression requires eeg refference
+            raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
+            model_plain = mne.preprocessing.EOGRegression(picks="eeg", picks_artifact="eog").fit(raw_car)
+            print(model_plain.coef_.shape)
+            print(model_plain.coef_)
             # fig = model_plain.plot(vlim=(None, None))  # regression coefficients as topomap
             # plt.show()
 
-            raw_clean_plain = model_plain.apply(raw)
+            raw_clean = model_plain.apply(raw_car)
 
             # Show the corrected data
-            # raw_clean_plain.plot(block=True)
+            # raw_clean.plot(block=True, title='raw_clean')
             
             # resmaple raw
-            new_sfreq = 120
-            raw_clean_plain = raw_clean_plain.resample(sfreq=new_sfreq)
-            raw_clean_plain.load_data()
+            new_sfreq = 200
+            raw_clean = raw_clean.resample(sfreq=new_sfreq)
+            # raw_clean = raw.resample(sfreq=new_sfreq)
+            raw_clean.load_data()
+
 
             ############### Create Event & Import N-bsck Report Data ###############
             # remove overlapping events and get reaction time
             remv_idx = []
             reaction_time = []
-            annot = raw_clean_plain.annotations
+            annot = raw_clean.annotations
             for i in range(len(annot.onset)-1):
                 del_t = annot.onset[i+1] - annot.onset[i]
                 # get overlapping events idx
@@ -169,18 +188,18 @@ def n_back_analysis():
                         if 2.0> del_t > 0.1:
                             reaction_time.append([del_t, annot.description[i], annot.description[i+1]])
             # remove overlapping events
-            raw_clean_plain.annotations.delete(remv_idx)
+            raw_clean.annotations.delete(remv_idx)
             reaction_time_list.append(reaction_time)
 
             custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
-            events, event_dict = mne.events_from_annotations(raw_clean_plain, event_id=custom_mapping)
+            events, event_dict = mne.events_from_annotations(raw_clean, event_id=custom_mapping)
             events = mne.pick_events(events, exclude=[10,100,101])
             event_dict = {key: event_dict[key] for key in event_dict if key not in ['fixation', 'response_alpha','response_pos']}
             
-            tmin, tmax = -0.2, 1.8
-            reject = dict(eeg=40e-6)      # unit: V (EEG channels)
-            epochs = mne.Epochs(raw=raw_clean_plain, events=events, event_id=event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
-            baseline_tmin, baseline_tmax = -0.2, 0
+            tmin, tmax = -0.2, 1.6 # tmin, tmax = -0.1, 1.5 (band-power)
+            reject = dict(eeg=80e-6)      # unit: V (EEG channels)
+            epochs = mne.Epochs(raw=raw_clean, events=events, event_id=event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
+            baseline_tmin, baseline_tmax = -0.1, 0
             baseline = (baseline_tmin, baseline_tmax)
             epochs.apply_baseline(baseline)
             
@@ -194,72 +213,34 @@ def n_back_analysis():
             key_list = nback.get_nback_key()
             report = nback.get_nback_report_data(lines, key_list)
             report_list.append(report)
-    
-    ############### FEATURE ANALYSIS ###############
+    del raw, raw_clean, epochs  # free up memory
+
     # fatigue and sleepniess questionnarie
+    '''
+    Initial survey, after run surveys
+    '''
     survey1 = {"Lack of Energy": [2,2,2,2],
         "Physical Exertion": [2,1,1,1],
         "Physical Discomfort": [1,2,2,1],
         "Lack of Motivation": [1,2,2,2],
-        "Sleepiness": [2,3,3,3]}
+        "Sleepiness": [2,3,3,3]} # run 0 1 2 3
     survey2 = {"Lack of Energy": [2,2,3,3],
         "Physical Exertion": [2,1,1,1],
         "Physical Discomfort": [1,1,1,1],
         "Lack of Motivation": [1,2,3,4],
-        "Sleepiness": [3,2,2,3]}
+        "Sleepiness": [3,2,2,3]} # run 0 1 2 4
     survey3 = {"Lack of Energy": [2,1,1,1],
         "Physical Exertion": [0,0,0,0],
         "Physical Discomfort": [1,1,1,2],
         "Lack of Motivation": [1,0,2,1],
-        "Sleepiness": [2,2,2,1]}
-    survey5 = {"Lack of Energy": [5,2,4,4,2],
-        "Physical Exertion": [3,3,6,7,6],
-        "Physical Discomfort": [4,3,6,7,6],
-        "Lack of Motivation": [2,1,7,8,3],
-        "Sleepiness": [4,1,3,4,2]}
+        "Sleepiness": [2,2,2,1]} # run 0 1 2 3
+    survey5 = {"Lack of Energy": [5,2,4,2],
+        "Physical Exertion": [3,3,6,6],
+        "Physical Discomfort": [4,3,6,6],
+        "Lack of Motivation": [2,1,7,3],
+        "Sleepiness": [4,1,3,2]} # run 0 1 2 4
 
-    # concatenate all epochs from different trials
-    all_epochs = mne.concatenate_epochs(epochs_list)
-    # all_epochs = all_epochs['0', '1', '2', '3']
-
-    # epoch analysis
-    all_n0_back = all_epochs['0'].average()
-    all_n1_back = all_epochs['1'].average()
-    all_n2_back = all_epochs['2'].average()
-    all_n3_back = all_epochs['3'].average()
-
-    # specific frequency bands
-    FREQ_BANDS = {"theta": [4.0, 8.0],
-                "alpha": [8.0, 13.0],
-                "sigma": [13.0, 16.0],
-                "beta": [16.0, 30.0]}
-    evk_power = []
-    for evk in [all_n0_back, all_n1_back, all_n2_back, all_n3_back]:
-        spectrum = evk.compute_psd(method='multitaper', fmin=1, fmax=30, tmin=None, tmax=None, normalization='length')
-        psds, freqs = spectrum.get_data(return_freqs=True)
-        
-        X = []
-        # Raw of Evoked type
-        if len(psds.shape) == 2:
-            for fmin, fmax in FREQ_BANDS.values():
-                band_power = psds[:, (freqs >= fmin) & (freqs < fmax)].mean(axis=-1)
-                X.append(band_power)
-            grand_avg_band_power = []
-            for power in X:
-                grand_avg_power = np.mean(power) # average across channels
-                grand_avg_band_power.append(grand_avg_power)
-        # Epochs type
-        elif len(psds.shape) == 3:
-            for fmin, fmax in FREQ_BANDS.values():
-                band_power = psds[:, :, (freqs >= fmin) & (freqs < fmax)].mean(axis=-1)
-                X.append(band_power)
-            grand_avg_band_power = []
-            for power in X:
-                grand_avg_power = np.mean(power, axis=1)#.reshape(1,4)
-                grand_avg_band_power.append(grand_avg_power)
-
-        evk_power.append(grand_avg_band_power)
-
+    ############### FEATURE ANALYSIS ###############
     reaction_time_run = []
     for run in reaction_time_list:
         temp = [[0],[0],[0],[0]]
@@ -269,16 +250,34 @@ def n_back_analysis():
         temp = [sum(x)/len(x) for x in temp]
         reaction_time_run.append(temp)
     grand_avg_reaction_time = np.array(reaction_time_run).mean(axis=0)
-    debug
-    for evk in [all_n0_back, all_n1_back, all_n2_back, all_n3_back]:
-        # global field power and spatial plot
-        evk.plot(gfp=True, spatial_colors=True, ylim=dict(eeg=[-4, 4]))
-        # # spatial plot + topomap
-        # evk.plot_joint()
-     
-    freqs = np.arange(5, 30)  # frequencies from 5-30Hz
-    vmin, vmax = -2, 2  # set min and max ERDS values in plot
-    baseline = (-0.2, 0)  # baseline interval (in s)
+    
+    # concatenate all epochs from different trials
+    all_epochs = mne.concatenate_epochs(epochs_list)
+    # all_epochs = all_epochs['0', '1', '2', '3']
+
+    # visualize epoch
+    all_n0_back = all_epochs['0']
+    all_n1_back = all_epochs['1']
+    all_n2_back = all_epochs['2']
+    all_n3_back = all_epochs['3']
+    epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back]
+    for epc in epcs:
+        epc.plot_image(picks="eeg", combine=None)
+
+    # evoked analysis
+    evokeds_list = [all_n0_back.average(), all_n1_back.average(), all_n2_back.average(), all_n3_back.average()]
+    conds = ("0", "1", "2", "3")
+    evks = dict(zip(conds, evokeds_list))
+    def custom_func(x):
+        return x.max(axis=1)
+
+    for combine in ("mean", "median", "gfp", custom_func):
+        mne.viz.plot_compare_evokeds(evks, picks="eeg", combine=combine)
+
+  
+    freqs = np.arange(3, 50)  # frequencies from 4-30Hz
+    vmin, vmax = -1, 1  # set min and max ERDS values in plot
+    baseline = (-0.1, 0)  # baseline interval (in s)
     cnorm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)  # min, center & max ERDS
 
     kwargs = dict(
@@ -301,7 +300,7 @@ def n_back_analysis():
         # select desired epochs for visualization
         tfr_ev = tfr[event]
         fig, axes = plt.subplots(
-            1, 5, figsize=(16, 4), gridspec_kw={"width_ratios": [10, 10, 10, 10, 1]}
+            1, 4, figsize=(12, 4), gridspec_kw={"width_ratios": [10, 10, 10, 1]}
         )
         for ch, ax in enumerate(axes[:-1]):  # for each channel
             # positive clusters
@@ -343,13 +342,13 @@ def n_back_analysis():
     df = tfr.to_data_frame(time_format=None, long_format=True)
 
     # Map to frequency bands:
-    freq_bounds = {"_": 0, "delta": 3, "theta": 7, "alpha": 13, "sigma": 16, "beta": 30}
+    freq_bounds = {"_": 0, "delta": 3, "theta": 7, "alpha": 13, "beta": 30}
     df["band"] = pd.cut(
         df["freq"], list(freq_bounds.values()), labels=list(freq_bounds)[1:]
     )
 
     # Filter to retain only relevant frequency bands:
-    freq_bands_of_interest = ["theta", "alpha", "sigma", "beta"]
+    freq_bands_of_interest = ["theta", "alpha", "beta"]
     df = df[df.band.isin(freq_bands_of_interest)]
     df["band"] = df["band"].cat.remove_unused_categories()
 
