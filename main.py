@@ -251,6 +251,31 @@ def n_back_analysis():
         reaction_time_run.append(temp)
     grand_avg_reaction_time = np.array(reaction_time_run).mean(axis=0)
     
+    # df = pd.DataFrame.from_dict(report)
+    # df.index.name = 'block'
+    
+    
+    run_ids = []
+    frames = []
+    for run_id, r in enumerate(report_list, 1):
+        run_ids.append(run_id)
+        temp_df = pd.DataFrame(r)
+        temp_df[['Hit','Miss', 'False Alarm']] = pd.DataFrame(temp_df.criterion.tolist(), index= temp_df.index)
+        temp_df = pd.concat([temp_df.drop(['nasa_tlx', 'criterion'], axis=1), temp_df['nasa_tlx'].apply(pd.Series)], axis=1)
+        frames.append(temp_df)
+    df = pd.concat(frames, keys=run_ids)
+    df.index.names = ['run','block']
+    print(df)
+    
+    debug
+
+
+#     for run in report_list:
+#         tlx = df = pd.DataFrame(run[")
+#         keys = ["Mental Demand", "Physical Demand", "Temporal Demand", "Performance", "Effort", "Frustration"]
+#         for block in range(len(tlx)):
+            
+
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
     # all_epochs = all_epochs['0', '1', '2', '3']

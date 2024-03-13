@@ -360,7 +360,7 @@ class N_back_report:
                             report['nasa_tlx'].append(tlx)
                         elif string == "Correct, Missed, False Alarm":
                             str_criterion = lines[line_idx+1]
-                            criterion = [int(s) for s in str_criterion if s.isdigit()]
+                            criterion = [int(s) for s in str_criterion.split(", ") if s.isdigit()] #[int(s) for s in str_criterion if s.isdigit()]
                             report['criterion'].append(criterion)
                         else:
                             lst = line.split('[',1)[1].replace(']','').split(', ') # split str to a list of str
@@ -382,6 +382,6 @@ class N_back_report:
                             report['nasa_tlx'].append(tlx)
                         elif string == "Correct, Missed, False Alarm":
                             str_criterion = lines[line_idx+1]
-                            criterion = [int(s) for s in str_criterion if s.isdigit()]
+                            criterion = [int(s) for s in str_criterion.split(", ") if s.isdigit()]
                             report['criterion'].append(criterion)
         return report # dict of list
