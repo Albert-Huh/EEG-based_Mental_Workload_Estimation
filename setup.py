@@ -299,13 +299,11 @@ class Setup:
         return interactive_annot # class mne.Annotations
     
 class N_back_report:
-    def __init__(self,report_path: str = None):
+    def __init__(self, report_path: str = None):
         assert report_path is not None, ' report_path is not defined'
         if not isinstance(report_path, str):
             raise TypeError
         self.report_path = report_path
-        # get the list of indication stings to extract data
-        self.lines = self.read_report_txt(report_path)
     
     def read_report_txt(report_path: str):
         file = open(report_path, 'r')
@@ -334,13 +332,13 @@ class N_back_report:
             key_list = [key_nasa_tlx, key_criterion] # list of str
         return key_list # list of str
 
-    def get_nback_report_data(lines: list, key_list: list):
+    def get_nback_report_data(lines: list, key_list: list, full: bool = False):
         # get the list of nback sequence
         nback_sequence = lines[5] # Sequence is on line 6
         sequence = [int(s) for s in list(nback_sequence) if s.isdigit()]
         # create report dict data object
         report = {}
-        if len(key_list) > 2:
+        if full == True:
             report['nback_sequence'] = sequence
             report['sol_alphabet'] = []
             report['sol_position'] = []
@@ -385,3 +383,34 @@ class N_back_report:
                             criterion = [int(s) for s in str_criterion.split(", ") if s.isdigit()]
                             report['criterion'].append(criterion)
         return report # dict of list
+    
+    def create_criterion_list(self):
+        pass
+        """
+        Get np.array of criterion array.
+        """
+        lines = self.read_report_txt(self.report_path)
+        key_list = self.get_nback_key(full = True)
+        report = self.get_nback_report_data(lines, key_list, full = True)
+        
+        event_id = np.zeros((len(report['nback_sequence']),1), int) # hit:100, miss:200, fa:300
+        sol_alpha = [item for block in report['sol_alphabet'] for item in block]
+        sol_pos = [item for block in report['sol_position'] for item in block]
+        user_alpha = [item for block in report['user_alphabet'] for item in block]
+        user_pos = [item for block in report['user_position'] for item in block]
+        
+        for i in range(len(sol_alpha)):
+            if sol_alpha[i] and user_alpha[i]:
+                event_id[i] = 100
+            elif sol_alpha[i] and user_alpha[i] == False:
+                event_id[i,2] = 200
+            elif sol_alpha[i] == False and user_alpha[i]:
+                event_id[i,2] = 300
+
+            if sol_pos[i] and user_pos[i]:
+                event_id[i] = 100
+            elif sol_pos[i] and user_pos[i] == False:
+                event_id[i,2] = 200
+            elif sol_pos[i] == False and user_pos[i]:
+                event_id[i,2] = 300
+        return event_id

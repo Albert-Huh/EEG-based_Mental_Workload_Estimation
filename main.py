@@ -11,7 +11,7 @@ from setup import N_back_report as nback
 import preprocessing
 
 # graphic render params
-new_rc_params = {'text.usetex': False, "svg.fonttype": 'none'}
+new_rc_params = {'text.usetex': False, 'svg.fonttype': 'none'}
 mpl.rcParams.update(new_rc_params)
 
 ############### IMPORT & CONVERT DATA ###############
@@ -83,7 +83,7 @@ def eye_oc():
 ############### SIGNAL PROCESSING & N-BACK ANALYSIS ###############
 def n_back_analysis():
     # list of raw data files in local data folder
-    subject_idx = '1'
+    subject_idx = '2'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -92,14 +92,26 @@ def n_back_analysis():
     # initilize epoch and event lists
     run_list = []
     epochs_list = []
+    target_epoch_list = []
     events_list = []
     report_list = []
+    criterion_list = []
     reaction_time_list = []
 
     ############### Import Data ###############
     for file_name in raw_data_list:
+        if file_name.endswith('.txt'):
+            report_path = os.path.join(data_folder_path, file_name)
+            # n_back_report = nback(report_path=report_path)
+            lines = nback.read_report_txt(report_path=report_path)
+            key_list = nback.get_nback_key(full = False)
+            report = nback.get_nback_report_data(lines, key_list, full = False)
+            # criterion = nback.create_criterion_list()
+            report_list.append(report)
+            # criterion_list.append(criterion)
+    for file_name in raw_data_list:        
         if file_name.endswith('eeg_raw.fif'):
-            run_idx = int(file_name.split("run-")[1].split("_eeg_raw.fif")[0])
+            run_idx = int(file_name.split('run-')[1].split('_eeg_raw.fif')[0])
             run_list.append(run_idx)
             raw_path = os.path.join(data_folder_path, file_name)
             raw = mne.io.read_raw_fif(raw_path)
@@ -145,9 +157,7 @@ def n_back_analysis():
 
             # mne EOGRegression requires eeg refference
             raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
-            model_plain = mne.preprocessing.EOGRegression(picks="eeg", picks_artifact="eog").fit(raw_car)
-            print(model_plain.coef_.shape)
-            print(model_plain.coef_)
+            model_plain = mne.preprocessing.EOGRegression(picks='eeg', picks_artifact='eog').fit(raw_car)
             # fig = model_plain.plot(vlim=(None, None))  # regression coefficients as topomap
             # plt.show()
 
@@ -195,50 +205,51 @@ def n_back_analysis():
             events, event_dict = mne.events_from_annotations(raw_clean, event_id=custom_mapping)
             events = mne.pick_events(events, exclude=[10,100,101])
             event_dict = {key: event_dict[key] for key in event_dict if key not in ['fixation', 'response_alpha','response_pos']}
-            
+            if run_idx <3:
+                idx = run_idx-1
+            else:
+                idx = 2
+            # critetion_events = events[:,2] = criterion_list[idx]
+            # critetion_events = mne.pick_events(critetion_events, exclude=[0,1,2,3])
+            # critetion_event_dict = {'hit': 100, 'miss': 200, 'false_alarm': 300}
             tmin, tmax = -0.2, 1.6 # tmin, tmax = -0.1, 1.5 (band-power)
             reject = dict(eeg=80e-6)      # unit: V (EEG channels)
             epochs = mne.Epochs(raw=raw_clean, events=events, event_id=event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
+            # target_epochs = mne.Epochs(raw=raw_clean, events=critetion_events, event_id=critetion_event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
             baseline_tmin, baseline_tmax = -0.1, 0
             baseline = (baseline_tmin, baseline_tmax)
             epochs.apply_baseline(baseline)
+            # target_epochs.apply_baseline(baseline)
             
             epochs_list.append(epochs)
             events_list.append(events)
-        
-        # 
-        if file_name.endswith('.txt'):
-            report_path = os.path.join(data_folder_path, file_name)
-            lines = nback.read_report_txt(report_path=report_path)
-            key_list = nback.get_nback_key()
-            report = nback.get_nback_report_data(lines, key_list)
-            report_list.append(report)
+            # target_epoch_list.append(target_epochs)
     del raw, raw_clean, epochs  # free up memory
 
     # fatigue and sleepniess questionnarie
     '''
     Initial survey, after run surveys
     '''
-    survey1 = {"Lack of Energy": [2,2,2,2],
-        "Physical Exertion": [2,1,1,1],
-        "Physical Discomfort": [1,2,2,1],
-        "Lack of Motivation": [1,2,2,2],
-        "Sleepiness": [2,3,3,3]} # run 0 1 2 3
-    survey2 = {"Lack of Energy": [2,2,3,3],
-        "Physical Exertion": [2,1,1,1],
-        "Physical Discomfort": [1,1,1,1],
-        "Lack of Motivation": [1,2,3,4],
-        "Sleepiness": [3,2,2,3]} # run 0 1 2 4
-    survey3 = {"Lack of Energy": [2,1,1,1],
-        "Physical Exertion": [0,0,0,0],
-        "Physical Discomfort": [1,1,1,2],
-        "Lack of Motivation": [1,0,2,1],
-        "Sleepiness": [2,2,2,1]} # run 0 1 2 3
-    survey5 = {"Lack of Energy": [5,2,4,2],
-        "Physical Exertion": [3,3,6,6],
-        "Physical Discomfort": [4,3,6,6],
-        "Lack of Motivation": [2,1,7,3],
-        "Sleepiness": [4,1,3,2]} # run 0 1 2 4
+    survey1 = {'Lack of Energy': [2,2,2,2],
+        'Physical Exertion': [2,1,1,1],
+        'Physical Discomfort': [1,2,2,1],
+        'Lack of Motivation': [1,2,2,2],
+        'Sleepiness': [2,3,3,3]} # run 0 1 2 3
+    survey2 = {'Lack of Energy': [2,2,3,3],
+        'Physical Exertion': [2,1,1,1],
+        'Physical Discomfort': [1,1,1,1],
+        'Lack of Motivation': [1,2,3,4],
+        'Sleepiness': [3,2,2,3]} # run 0 1 2 4
+    survey3 = {'Lack of Energy': [2,1,1,1],
+        'Physical Exertion': [0,0,0,0],
+        'Physical Discomfort': [1,1,1,2],
+        'Lack of Motivation': [1,0,2,1],
+        'Sleepiness': [2,2,2,1]} # run 0 1 2 3
+    survey5 = {'Lack of Energy': [5,2,4,2],
+        'Physical Exertion': [3,3,6,6],
+        'Physical Discomfort': [4,3,6,6],
+        'Lack of Motivation': [2,1,7,3],
+        'Sleepiness': [4,1,3,2]} # run 0 1 2 4
 
     ############### FEATURE ANALYSIS ###############
     reaction_time_run = []
@@ -262,22 +273,81 @@ def n_back_analysis():
         temp_df = pd.DataFrame(r)
         temp_df[['Hit','Miss', 'False Alarm']] = pd.DataFrame(temp_df.criterion.tolist(), index= temp_df.index)
         temp_df = pd.concat([temp_df.drop(['nasa_tlx', 'criterion'], axis=1), temp_df['nasa_tlx'].apply(pd.Series)], axis=1)
+        temp_df.rename(columns={'nback_sequence':'N'}, inplace=True)
+        temp_df[['N']] = temp_df[['N']].astype(str)
+        temp_df['Total TLX'] = temp_df['Mental Demand'] + temp_df['Physical Demand'] + temp_df['Temporal Demand'] + temp_df['Performance'] + temp_df['Effort'] + temp_df['Frustration']
         frames.append(temp_df)
     df = pd.concat(frames, keys=run_ids)
-    df.index.names = ['run','block']
+    df.index.names = ['Run','Trial']
+    df = df.reset_index()
     print(df)
-    
+
+    p = sns.catplot(
+        data=df, x='N', y='Total TLX', col='Run',
+        kind='bar', height=5, aspect=0.6,order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    p = sns.catplot(
+        data=df, x='Trial', y='Total TLX', col='Run',
+        kind='point', height=5, aspect=0.8,)
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    df2 = df.drop(['Hit', 'Miss', 'False Alarm', 'Total TLX'], axis=1)
+    df2 = df2.melt(['Run','Trial', 'N'])
+    df2.rename(columns={'variable':'Questionnaire', 'value': 'Scale'}, inplace=True)
+    print(df2)
+
+    p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N', row='Run',
+                    kind='bar', height=5, aspect=2.0,hue_order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N',
+                    kind='bar', height=5, aspect=4.0,hue_order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    df3 = df.drop(['Trial','Mental Demand', 'Physical Demand', 'Temporal Demand', 'Performance', 'Effort', 'Frustration', 'Total TLX'], axis=1)
+    df3['TN'] = 20 - df3['Hit'] - df3['Miss'] - df3['False Alarm']
+    df3 = df3.melt(['Run','N'])
+    df3.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
+    df3 = pd.pivot_table(df3, values='Count', index=['Run','N'], columns='Criterion', aggfunc='sum')
+    df3['Detection Rate'] = df3['Hit']/(df3['Hit'] + df3['Miss'])
+    df3['False Alarm Rate'] = df3['False Alarm']/(df3['False Alarm'] + df3['TN'])
+    df3 = df3.reset_index()
+    df3 = df3.rename_axis(None, axis=1)
+    print(df3)
+
+    p = sns.catplot(
+        data=df3, x='N', y='Detection Rate', col='Run',
+        kind='bar', height=5, aspect=0.8, order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    p = sns.catplot(
+        data=df3, x='N', y='Detection Rate',
+        kind='bar', height=5, aspect=1.0, order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    p = sns.catplot(
+        data=df3, x='N', y='False Alarm Rate', col='Run',
+        kind='bar', height=5, aspect=0.8, order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
+    p = sns.catplot(
+        data=df3, x='N', y='False Alarm Rate',
+        kind='bar', height=5, aspect=1.0, order=['0','1','2','3'])
+    p.despine(offset=5, trim=True)
+    plt.show()
+
     debug
-
-
-#     for run in report_list:
-#         tlx = df = pd.DataFrame(run[")
-#         keys = ["Mental Demand", "Physical Demand", "Temporal Demand", "Performance", "Effort", "Frustration"]
-#         for block in range(len(tlx)):
-            
-
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
+    all_target_epochs = mne.concatenate_epochs(target_epochs_list)
     # all_epochs = all_epochs['0', '1', '2', '3']
 
     # visualize epoch
@@ -285,22 +355,30 @@ def n_back_analysis():
     all_n1_back = all_epochs['1']
     all_n2_back = all_epochs['2']
     all_n3_back = all_epochs['3']
+    all_hit = all_target_epochs['hit']
+    all_miss = all_target_epochs['miss']
+    all_fa = all_target_epochs['false_alarm']
+
     epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back]
-    for epc in epcs:
-        epc.plot_image(picks="eeg", combine="std")
+    # for epc in epcs:
+    #     epc.plot_image(picks='eeg', combine='std')
 
     # evoked analysis
     evokeds_list = [all_n0_back.average(), all_n1_back.average(), all_n2_back.average(), all_n3_back.average()]
-    conds = ("0", "1", "2", "3")
+    target_evokeds_list = [all_hit.average(), all_miss.average(), all_fa.average()]
+    conds = ('0', '1', '2', '3')
+    target_conds = ('hit', 'miss', 'false_alarm')
     evks = dict(zip(conds, evokeds_list))
+    target_evks = dict(zip(conds, evokeds_list))  
     def custom_func(x):
         return x.max(axis=1)
 
-    for combine in ("mean", "median", "gfp", custom_func):
-        mne.viz.plot_compare_evokeds(evks, picks="eeg", combine=combine)
+    for combine in ('mean', 'median', 'gfp', custom_func):
+        mne.viz.plot_compare_evokeds(evks, picks='eeg', combine=combine)
+        mne.viz.plot_compare_evokeds(target_evks, picks='eeg', combine=combine)
 
-    for evk in evokeds_list:
-        evk.plot(picks="eeg")
+    # for evk in evokeds_list:
+    #     evk.plot(picks='eeg')
     '''
     freqs = np.arange(3, 50)  # frequencies from 3-50Hz
     vmin, vmax = -1, 1  # set min and max ERDS values in plot
@@ -308,7 +386,7 @@ def n_back_analysis():
     cnorm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)  # min, center & max ERDS
 
     kwargs = dict(
-        n_permutations=100, step_down_p=0.05, seed=1, buffer_size=None, out_type="mask"
+        n_permutations=100, step_down_p=0.05, seed=1, buffer_size=None, out_type='mask'
     )  # for cluster test
 
     tfr = mne.time_frequency.tfr_multitaper(
@@ -320,14 +398,14 @@ def n_back_analysis():
         average=False,
         decim=2,
     )
-    tfr.crop(tmin, tmax).apply_baseline(baseline, mode="mean")
+    tfr.crop(tmin, tmax).apply_baseline(baseline, mode='mean')
     event_ids = {'0': 0, '1': 1, '2': 2, '3': 3}
 
     for event in event_ids:
         # select desired epochs for visualization
         tfr_ev = tfr[event]
         fig, axes = plt.subplots(
-            1, 4, figsize=(12, 4), gridspec_kw={"width_ratios": [10, 10, 10, 1]}
+            1, 4, figsize=(12, 4), gridspec_kw={'width_ratios': [10, 10, 10, 1]}
         )
         for ch, ax in enumerate(axes[:-1]):  # for each channel
             # positive clusters
@@ -345,22 +423,22 @@ def n_back_analysis():
             # plot TFR (ERDS map with masking)
             tfr_ev.average().plot(
                 [ch],
-                cmap="RdBu",
+                cmap='RdBu',
                 cnorm=cnorm,
                 axes=ax,
                 colorbar=False,
                 show=False,
                 mask=mask,
-                mask_style="mask",
+                mask_style='mask',
             )
 
             ax.set_title(all_epochs.ch_names[ch], fontsize=10)
-            ax.axvline(0, linewidth=1, color="black", linestyle=":")  # event
+            ax.axvline(0, linewidth=1, color='black', linestyle=':')  # event
             if ch != 0:
-                ax.set_ylabel("")
-                ax.set_yticklabels("")
-        fig.colorbar(axes[0].images[-1], cax=axes[-1]).ax.set_yscale("linear")
-        fig.suptitle(f"ERDS ({event}-Back)")
+                ax.set_ylabel('')
+                ax.set_yticklabels('')
+        fig.colorbar(axes[0].images[-1], cax=axes[-1]).ax.set_yscale('linear')
+        fig.suptitle(f'ERDS ({event}-Back)')
         plt.show()
 
     df = tfr.to_data_frame(time_format=None)
@@ -369,55 +447,55 @@ def n_back_analysis():
     df = tfr.to_data_frame(time_format=None, long_format=True)
 
     # Map to frequency bands:
-    freq_bounds = {"_": 0, "delta": 3, "theta": 7, "alpha": 13, "beta": 30}
-    df["band"] = pd.cut(
-        df["freq"], list(freq_bounds.values()), labels=list(freq_bounds)[1:]
+    freq_bounds = {'_': 0, 'delta': 3, 'theta': 7, 'alpha': 13, 'beta': 30}
+    df['band'] = pd.cut(
+        df['freq'], list(freq_bounds.values()), labels=list(freq_bounds)[1:]
     )
 
     # Filter to retain only relevant frequency bands:
-    freq_bands_of_interest = ["theta", "alpha", "beta"]
+    freq_bands_of_interest = ['theta', 'alpha', 'beta']
     df = df[df.band.isin(freq_bands_of_interest)]
-    df["band"] = df["band"].cat.remove_unused_categories()
+    df['band'] = df['band'].cat.remove_unused_categories()
 
     # Order channels for plotting:
-    df["channel"] = df["channel"].cat.reorder_categories(("AF8", "Fp2", "Fp1", "AF7"), ordered=True)
+    df['channel'] = df['channel'].cat.reorder_categories(('AF8', 'Fp2', 'Fp1', 'AF7'), ordered=True)
 
-    g = sns.FacetGrid(df, row="band", col="channel", margin_titles=True)
-    g.map(sns.lineplot, "time", "value", "condition", n_boot=10)
-    axline_kw = dict(color="black", linestyle="dashed", linewidth=0.5, alpha=0.5)
+    g = sns.FacetGrid(df, row='band', col='channel', margin_titles=True)
+    g.map(sns.lineplot, 'time', 'value', 'condition', n_boot=10)
+    axline_kw = dict(color='black', linestyle='dashed', linewidth=0.5, alpha=0.5)
     g.map(plt.axhline, y=0, **axline_kw)
     g.map(plt.axvline, x=0, **axline_kw)
     g.set(ylim=(-1.5, 2.5))
-    g.set_axis_labels("Time (s)", "ERDS")
-    g.set_titles(col_template="{col_name}", row_template="{row_name}")
-    g.add_legend(ncol=2, loc="lower center")
+    g.set_axis_labels('Time (s)', 'ERDS')
+    g.set_titles(col_template='{col_name}', row_template='{row_name}')
+    g.add_legend(ncol=2, loc='lower center')
     g.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.08)
 
     df_mean = (
-        df.query("time > 1")
-        .groupby(["condition", "epoch", "band", "channel"], observed=False)[["value"]]
+        df.query('time > 1')
+        .groupby(['condition', 'epoch', 'band', 'channel'], observed=False)[['value']]
         .mean()
         .reset_index()
     )
 
     g = sns.FacetGrid(
-        df_mean, col="condition", col_order=["0", "1", "2", "3"], margin_titles=True
+        df_mean, col='condition', col_order=['0', '1', '2', '3'], margin_titles=True
     )
     g = g.map(
         sns.violinplot,
-        "channel",
-        "value",
-        "band",
+        'channel',
+        'value',
+        'band',
         cut=0,
-        palette="deep",
-        order=["AF8", "Fp2", "Fp1", "AF7"],
+        palette='deep',
+        order=['AF8', 'Fp2', 'Fp1', 'AF7'],
         hue_order=freq_bands_of_interest,
         linewidth=0.5,
-    ).add_legend(ncol=4, loc="lower center")
+    ).add_legend(ncol=4, loc='lower center')
 
     g.map(plt.axhline, **axline_kw)
-    g.set_axis_labels("", "ERDS")
-    g.set_titles(col_template="{col_name}-Back", row_template="{row_name}")
+    g.set_axis_labels('', 'ERDS')
+    g.set_titles(col_template='{col_name}-Back', row_template='{row_name}')
     g.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.3)
 
     plt.show()
