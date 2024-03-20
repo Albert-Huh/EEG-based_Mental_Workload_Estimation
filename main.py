@@ -264,8 +264,7 @@ def n_back_analysis():
     
     # df = pd.DataFrame.from_dict(report)
     # df.index.name = 'block'
-    
-    
+
     run_ids = []
     frames = []
     for run_id, r in enumerate(report_list, 1):
@@ -278,6 +277,28 @@ def n_back_analysis():
         temp_df['Total TLX'] = temp_df['Mental Demand'] + temp_df['Physical Demand'] + temp_df['Temporal Demand'] + temp_df['Performance'] + temp_df['Effort'] + temp_df['Frustration']
         frames.append(temp_df)
     df = pd.concat(frames, keys=run_ids)
+    
+    #### EEG BAND POWERS ####
+    
+    # pandas dataframe >> epoch .getdata()
+    # time frequency analysis >> basically spectrogram
+    # integrate for the power 
+    # extract manually from the frequesncy >> alpha, beta, theta bands
+    # plot using seaborn
+    # report_list gives the nback sequence 
+    # is it only possible to get the response alpha from here??
+    
+    epoch_num = 0;
+    for epoch in epochs_list:
+        psd = epoch['{}'.format(epoch_num)].compute_psd()
+        f = psd.plot(exclude="bads", amplitude=False)
+        plt.show()
+        epoch_num += 1
+        # only want eeg channels
+ 
+    # Break the code for only frequency bands
+    debug
+    
     df.index.names = ['Run','Trial']
     df = df.reset_index()
     print(df)
@@ -342,9 +363,8 @@ def n_back_analysis():
         data=df3, x='N', y='False Alarm Rate',
         kind='bar', height=5, aspect=1.0, order=['0','1','2','3'])
     p.despine(offset=5, trim=True)
-    plt.show()
-
-    debug
+    plt.show()   
+    
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
     all_target_epochs = mne.concatenate_epochs(target_epochs_list)
