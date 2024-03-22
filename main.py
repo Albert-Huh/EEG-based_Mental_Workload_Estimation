@@ -83,7 +83,7 @@ def eye_oc():
 ############### SIGNAL PROCESSING & N-BACK ANALYSIS ###############
 def n_back_analysis():
     # list of raw data files in local data folder
-    subject_idx = '2'
+    subject_idx = '1'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -279,29 +279,163 @@ def n_back_analysis():
     df = pd.concat(frames, keys=run_ids)
     
     #### EEG BAND POWERS ####
+
+    # TODO: 
+    # Find the grand average (try not to do it across trials... 0-16)
+    # If sill weird, then try to figure out with raw data (with and without EOG correction)
     
-    # pandas dataframe >> epoch .getdata()
-    # time frequency analysis >> basically spectrogram
-    # integrate for the power 
-    # extract manually from the frequesncy >> alpha, beta, theta bands
-    # plot using seaborn
-    # report_list gives the nback sequence 
-    # is it only possible to get the response alpha from here??
+    # Frequency band
+    # Theta: 4 - 8 Hz
+    # Alpha: 8 - 13 Hz
+    # Beta: 13 - 30 Hz
+            
+    theta_low_bound = 4
+    theta_high_bound = 8
+    alpha_low_bound = 8
+    alpha_high_bound = 13
+    beta_low_bound = 13
+    beta_high_bound = 30
     
-    epoch_num = 0;
-    for epoch in epochs_list:
-        psd = epoch['{}'.format(epoch_num)].compute_psd()
-        f = psd.plot(exclude="bads", amplitude=False)
-        plt.show()
+    # Keeping track of information based on the runs 
+    theta_runs_list = []
+    alpha_runs_list = []
+    beta_runs_list = []
+    
+    band_powers = []
+    band_power_by_trial = []
+
+    epoch_num = 0
+    for epoch in epochs_list:   # Loops through each run
+        theta_list = {'run': epoch_num, 'psd': [], 'freq': []}
+        alpha_list = {'run': epoch_num, 'psd': [], 'freq': []}
+        beta_list = {'run': epoch_num, 'psd': [], 'freq': []}
+        
+        for n in range(4):  # Loops through each n-back trial
+            data = epoch['{}'.format(n)].get_data(copy=True)
+            psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=200)
+            psds = psd_extraction[0] * 1e12     # Put the units on a micro volt ^ 2 scale
+            freqs = psd_extraction[1]
+            
+            # Compute manually if the psd is incorrect
+            # print(psds)
+            
+            t = a = b = 0   # Averages per n per trial
+            
+            # Integrate with Riemann sums and linear interpolation
+            for i in range(len(freqs)-1):  # Why is the number of frequencies larger than the number of psds? (Are the rest zeroes?) 
+                if (i == (len(psds)-1)): # For safety purposes
+                    break
+                
+                theta = 0
+                alpha = 0
+                beta = 0
+                
+                # In each psd, it returns the recorded signal from each channel
+                # TODO: Is it okay to just average all of the channels?
+                b1 = np.average(psds[i], axis=None, weights=None, returned=False)
+                b2 = np.average(psds[i+1], axis=None, weights=None, returned=False)
+                h = freqs[i+1]-freqs[i]
+                area = 0.5*(b1+b2)/h   # Where h is dx, the distance between the previous and next sample
+                
+                # TODO: Figure out more practical implementation since your dx is not consistent between samples...
+                if ((freqs[i] >= theta_low_bound) & (freqs[i] < theta_high_bound)):
+                    t += area
+                    theta = area
+                    theta_list['psd'].append(psds[i])
+                    theta_list['freq'].append(freqs[i])
+                elif ((freqs[i] >= alpha_low_bound) & (freqs[i] < alpha_high_bound)):
+                    a += area
+                    alpha = area
+                    alpha_list['psd'].append(psds[i])
+                    alpha_list['freq'].append(freqs[i])
+                elif ((freqs[i] >= beta_low_bound) & (freqs[i] < beta_high_bound)):
+                    b += area
+                    beta = area
+                    beta_list['psd'].append(psds[i])
+                    beta_list['freq'].append(freqs[i])
+                else:
+                    continue
+                
+                # Band powers per run
+                run = {'run': epoch_num, 'n': n, 'theta': theta, 'alpha': alpha, 'beta': beta}
+                band_powers.append(run)
+                
+            trial = {'run': epoch_num, 'n': n, 'theta': t, 'alpha': a, 'beta': b}
+            band_power_by_trial.append(trial)
+            
+        
+        # PSD and corresponding frequency (simulate and check against the epoch.compute_psd())
+        theta_runs_list.append(theta_list)
+        alpha_runs_list.append(alpha_list)
+        beta_runs_list.append(beta_list)
+        
         epoch_num += 1
-        # only want eeg channels
- 
-    # Break the code for only frequency bands
-    debug
+    
+    
+    #### Testing ####
+    
+    # Create a data frame that can be used to interface for sns plotting
+    # band_power_df = pd.DataFrame(band_powers)s
+    # print(band_power_df)
+    
+    # This is by the dx, or each 'slice' of the area under the curve for PSD
+    # ax = band_power_df.plot.bar(x='n', y='alpha')   # Somewhat working, kinda ugly
+    # plt.show()s
+    
+    # TODO: MOST USED CODE
+    # This is the ideal one, group together features that seem to have similar characteristics
+    band_power_by_trial_df = pd.DataFrame(band_power_by_trial)
+    
+    # Everything combined onto one figure
+    # band_power_by_trial_df.plot.bar(x='n', y=['theta', 'alpha', 'beta'])
+    
+    # Each of these are the summation of alpha, theta, and beta for each category by n
+    # Separated by the runs (figure wise)
+    # band_power_by_trial_df.groupby('run').plot.bar(x='n', y=['theta', 'alpha', 'beta'])
+    
+    # Grand average
+    grand_average = band_power_by_trial_df.groupby('n').sum()
+    # grand_average.drop(['run'])   # Remove runs from here later
+    print(grand_average)
+    grand_average.plot.bar(y=['theta', 'alpha', 'beta'])   
+    plt.show()
+    
+    
+    #### SOMETHING IS WEIRD SO TRY TO FIGURE OUT WHY WITH RAW DATA ####
+    
+    
+    #### THESE DONT WORK!! Is it the yscale that is the issue? ####
+    # p = sns.catplot(
+    #     data=band_power_df, x='n', y='theta', col='run',
+    #     kind='bar', height=5, aspect=0.6, order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.autoscale()
+    # plt.show()
+    
+    # p = sns.catplot(
+    #     data=band_power_df, x='n', y='alpha', col='run',
+    #     kind='bar', height=5, aspect=0.6, order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.autoscale()
+    # plt.show()
+    
+    # p = sns.catplot(
+    #     data=band_power_df, x='n', y='beta', col='run',
+    #     kind='bar', height=5, aspect=0.6, order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.autoscale()
+    # plt.show()
+
+    # Complete visualization
+    # psd = epoch['{}'.format(epoch_num)].compute_psd()
+    # p = psd.plot(exclude="bads", amplitude=False)
+    # plt.show()
     
     df.index.names = ['Run','Trial']
     df = df.reset_index()
     print(df)
+    
+    debug
 
     p = sns.catplot(
         data=df, x='N', y='Total TLX', col='Run',
