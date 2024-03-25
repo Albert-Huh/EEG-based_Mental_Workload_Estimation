@@ -97,6 +97,9 @@ def n_back_analysis():
     report_list = []
     criterion_list = []
     reaction_time_list = []
+    
+    # Dropping 19 samples after the stimulus
+    new_epochs_list = []
 
     ############### Import Data ###############
     for file_name in raw_data_list:
@@ -204,6 +207,12 @@ def n_back_analysis():
             custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
             events, event_dict = mne.events_from_annotations(raw_clean, event_id=custom_mapping)
             events = mne.pick_events(events, exclude=[10,100,101])
+            
+            # Drop the 19 seconds sampling after onset for the stimulus
+            new_events = []
+            for i in range(round(len(events)/20)):
+                new_events.append(events[i*20])
+                
             event_dict = {key: event_dict[key] for key in event_dict if key not in ['fixation', 'response_alpha','response_pos']}
             if run_idx <3:
                 idx = run_idx-1
@@ -220,6 +229,11 @@ def n_back_analysis():
             baseline = (baseline_tmin, baseline_tmax)
             epochs.apply_baseline(baseline)
             # target_epochs.apply_baseline(baseline)
+    
+            # New epoch list with only the stimulus (19 seconds after are dropped)
+            new_tmin, new_tmax = -0.2, 40   # 2 seconds sample, 20 second stimulus until the next one
+            new_epochs = mne.Epochs(raw=raw_clean, events=new_events, event_id=event_dict, event_repeated='drop', tmin=new_tmin, tmax=new_tmax, preload=True, reject=reject, picks='eeg', baseline=None)
+            new_epochs_list.append(new_epochs)
             
             epochs_list.append(epochs)
             events_list.append(events)
@@ -278,12 +292,7 @@ def n_back_analysis():
         frames.append(temp_df)
     df = pd.concat(frames, keys=run_ids)
     
-    #### EEG BAND POWERS ####
-
-    # TODO: 
-    # Find the grand average (try not to do it across trials... 0-16)
-    # If sill weird, then try to figure out with raw data (with and without EOG correction)
-    
+    #### EEG BAND POWERS ####    
     # Frequency band
     # Theta: 4 - 8 Hz
     # Alpha: 8 - 13 Hz
@@ -295,6 +304,58 @@ def n_back_analysis():
     alpha_high_bound = 13
     beta_low_bound = 13
     beta_high_bound = 30
+    
+    # Segment the 40s, 20, simuli, trials >> 16 epochs
+    # compute the psd across the whole thing
+    
+    # range of freuqencies
+    # compute the psd for epoch >> issue
+    
+    # You can shorten this down
+    e_num = 0 
+    new_band_powers = []
+    for epoch in new_epochs_list:   # Go through runs
+        for n in range(4):  # Go through each n-back trial
+            data = epoch['{}'.format(n)].get_data(copy=True)    # There should be 4 
+            psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=200, fmin=4, fmax=30)
+            psds = psd_extraction[0] * 1e12     # Put the units on a micro volt ^ 2 scale
+            freqs = psd_extraction[1]
+            
+            theta_lb, theta_ub = 0, (np.where(freqs <= 8))[0][-1]
+            alpha_lb, alpha_ub = (theta_ub + 1), (np.where(freqs <= 13))[0][-1]
+            beta_lb, beta_ub = (alpha_ub + 1), (np.where(freqs <= 30))[0][-1]
+            
+            # PSDs construction:
+            # np_array with shape: (4, 4, 1046) (3D array)
+            # What I am guessing it is structure by:
+            # 1st layer: 4 epochs relating to that one trial
+            # 2nd layer: 4 channels sampling for the same epoch
+            # 3rd layer: 1046 sampled values (time series data >> but I'm guessing by frequency since psd applied)
+            
+            # Find the average across all 4 channels
+            avg_psd = np.mean(psds, axis=1)
+            
+            # Integrate everything
+            theta = alpha = beta = 0
+            for e in range(len(avg_psd)):
+                theta += np.trapz((avg_psd[e])[theta_lb:theta_ub], freqs[theta_lb:theta_ub])
+                alpha += np.trapz((avg_psd[e])[alpha_lb:alpha_ub], freqs[alpha_lb:alpha_ub])
+                beta += np.trapz((avg_psd[e])[beta_lb:beta_ub], freqs[beta_lb:beta_ub])
+            
+            band_powers = {'n': n, 'theta': theta, 'alpha': alpha, 'beta': beta}
+            new_band_powers.append(band_powers)
+
+    # Each individual n trials
+    new_band_powers_df = pd.DataFrame(new_band_powers)
+    new_band_powers_df.plot.bar(x='n', y=['theta', 'alpha', 'beta'])
+    plt.show()
+    
+    # Grand average across all channels
+    grand_avg = new_band_powers_df.groupby('n').sum()
+    grand_avg.plot.bar(y=['theta', 'alpha', 'beta'])
+    plt.show()
+    
+    debug
     
     # Keeping track of information based on the runs 
     theta_runs_list = []
@@ -373,21 +434,20 @@ def n_back_analysis():
     
     
     #### Testing ####
-    
     # Create a data frame that can be used to interface for sns plotting
-    # band_power_df = pd.DataFrame(band_powers)s
+    band_power_df = pd.DataFrame(band_powers)
     # print(band_power_df)
     
     # This is by the dx, or each 'slice' of the area under the curve for PSD
     # ax = band_power_df.plot.bar(x='n', y='alpha')   # Somewhat working, kinda ugly
-    # plt.show()s
+    # plt.show()
     
     # TODO: MOST USED CODE
     # This is the ideal one, group together features that seem to have similar characteristics
     band_power_by_trial_df = pd.DataFrame(band_power_by_trial)
     
     # Everything combined onto one figure
-    # band_power_by_trial_df.plot.bar(x='n', y=['theta', 'alpha', 'beta'])
+    band_power_by_trial_df.plot.bar(x='n', y=['theta', 'alpha', 'beta'])
     
     # Each of these are the summation of alpha, theta, and beta for each category by n
     # Separated by the runs (figure wise)
@@ -396,7 +456,6 @@ def n_back_analysis():
     # Grand average
     grand_average = band_power_by_trial_df.groupby('n').sum()
     # grand_average.drop(['run'])   # Remove runs from here later
-    print(grand_average)
     grand_average.plot.bar(y=['theta', 'alpha', 'beta'])   
     plt.show()
     
