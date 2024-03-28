@@ -83,7 +83,7 @@ def eye_oc():
 ############### SIGNAL PROCESSING & N-BACK ANALYSIS ###############
 def n_back_analysis():
     # list of raw data files in local data folder
-    subject_idx = '2'
+    subject_idx = '3'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -156,18 +156,23 @@ def n_back_analysis():
             raw_clean._data[:4, :] = eeg_corrected
 
             '''
-            # mne EOGRegression requires eeg refference
-            raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
-            model_plain = mne.preprocessing.EOGRegression(picks='eeg', picks_artifact='eog').fit(raw_car)
-            # fig = model_plain.plot(vlim=(None, None))  # regression coefficients as topomap
-            # plt.show()
+            if subject_idx == '3':
+                raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
+                ica = preprocessing.Indepndent_Component_Analysis(raw_car, n_components=raw_car.info['nchan']-2, seed=90)
+                raw_clean = ica.perfrom_ICA()
+            else:
+                # mne EOGRegression requires eeg refference
+                raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
+                model_plain = mne.preprocessing.EOGRegression(picks='eeg', picks_artifact='eog').fit(raw_car)
+                # fig = model_plain.plot(vlim=(None, None))  # regression coefficients as topomap
+                # plt.show()
 
-            raw_clean = model_plain.apply(raw_car)
+                raw_clean = model_plain.apply(raw_car)
 
 
             # Show the corrected data
             # raw.plot(block=False, title='raw')
-            # raw_clean.plot(block=True, title='raw_clean')
+            raw_clean.plot(block=True, title='raw_clean')
             
             # resmaple raw
             new_sfreq = 200
@@ -200,17 +205,17 @@ def n_back_analysis():
                             events[j,2] += criterion_list[i][k]
                             k += 1
                     # events[:,2] += criterion_list[i]
-            new_event_dict = {'0/true_negative': 0, '0/hit': 10, '0/miss': 20, '0/false_alarm': 30,
-                              '1/true_negative': 1, '1/hit': 11, '1/miss': 21, '1/false_alarm': 31,
-                              '2/true_negative': 2, '2/hit': 12, '2/miss': 22, '2/false_alarm': 32,
-                              '3/true_negative': 3, '3/hit': 13, '3/miss': 23, '3/false_alarm': 33,
+            new_event_dict = {'0/correct_rejection': 0, '0/hit': 10, '0/miss': 20, '0/false_alarm': 30,
+                              '1/correct_rejection': 1, '1/hit': 11, '1/miss': 21, '1/false_alarm': 31,
+                              '2/correct_rejection': 2, '2/hit': 12, '2/miss': 22, '2/false_alarm': 32,
+                              '3/correct_rejection': 3, '3/hit': 13, '3/miss': 23, '3/false_alarm': 33,
                               'fixation': 40, 'response_alpha': 100, 'response_pos': 101}
                         
             # get reaction time
             rt_event_dict = {key: new_event_dict[key] for key 
                              in new_event_dict if key 
-                             not in ['0/true_negative','0/miss','1/true_negative','1/miss',
-                              '2/true_negative','2/miss','3/true_negative','3/miss','fixation']}
+                             not in ['0/correct_rejection','0/miss','1/correct_rejection','1/miss',
+                              '2/correct_rejection','2/miss','3/correct_rejection','3/miss','fixation']}
             rt_event_dict = {y: x for x, y in rt_event_dict.items()}
             new_annot = mne.annotations_from_events(events=events, sfreq=new_sfreq, event_desc=rt_event_dict)
             reaction_time = []
@@ -274,11 +279,6 @@ def n_back_analysis():
         'Sleepiness': [2,2,6,0]} # run 0 1 2 4
 
     ############### FEATURE ANALYSIS ###############
-    # debug
-    # df = pd.DataFrame.from_dict(report)
-    # df.index.name = 'block'
-    
-
     run_ids = []
     frames = []
     for run_id, r in enumerate(report_list, 1):
@@ -294,18 +294,6 @@ def n_back_analysis():
     df.index.names = ['Run','Trial']
     df = df.reset_index()
     print(df)
-    
-    # p = sns.catplot(
-    #     data=df, x='N', y='Total TLX', col='Run',
-    #     kind='bar', height=5, aspect=0.6,order=['0','1','2','3'])
-    # p.despine(offset=5, trim=True)
-    # plt.show()
-
-    # p = sns.catplot(
-    #     data=df, x='Trial', y='Total TLX', col='Run',
-    #     kind='point', height=5, aspect=0.8,)
-    # p.despine(offset=5, trim=True)
-    # plt.show()
 
     df2 = df.drop(['Hit', 'Miss', 'False Alarm', 'Total TLX'], axis=1)
     df2 = df2.melt(['Run','Trial', 'Run_id', 'N'])
@@ -356,7 +344,7 @@ def n_back_analysis():
     df4.index.names = ['Run','N']
     df4 = df4.reset_index()
     df4.rename(columns={0:'RT:Hit', 1:'RT:False Alarm', 2:'RT'}, inplace=True)
-    print(df4)
+
 
     df3 = df.drop(['Trial','Mental Demand', 'Physical Demand', 'Temporal Demand', 'Performance', 'Effort', 'Frustration', 'Total TLX'], axis=1)
     df3['TN'] = 20 - df3['Hit'] - df3['Miss'] - df3['False Alarm']
@@ -369,7 +357,7 @@ def n_back_analysis():
     df3 = df3.rename_axis(None, axis=1)
     cols_to_use = df4.columns.difference(df3.columns)
     df3 = pd.merge(df3, df4[cols_to_use], left_index=True, right_index=True, how='outer')
-    print(df3)
+    '''
     p = sns.catplot(
         data=df3, x='N', y='Detection Rate', col='Run',
         kind='bar', height=5, aspect=0.8, order=['0','1','2','3'])
@@ -393,9 +381,9 @@ def n_back_analysis():
         kind='bar', height=5, aspect=1.0, order=['0','1','2','3'])
     p.despine(offset=5, trim=True)
     plt.show()
+    '''
 
-
-    # concatenate all epochs from different trials
+    # concatenate all epochs from different runs
     all_epochs = mne.concatenate_epochs(epochs_list)
     # all_epochs = all_epochs['0', '1', '2', '3']
 
@@ -407,40 +395,41 @@ def n_back_analysis():
     all_hit = all_epochs['hit']
     all_miss = all_epochs['miss']
     all_fa = all_epochs['false_alarm']
-    all_tn = all_epochs['true_negative']
+    all_cr = all_epochs['correct_rejection']
 
-    epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back]
-    # for epc in epcs:
-    #     epc.plot_image(picks='eeg', combine='std')
+    epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back, all_hit, all_miss, all_fa, all_cr]
+    for epc in epcs:
+        epc.plot_image(picks='eeg', combine='std')
 
     # evoked analysis
-    # evokeds_list = [all_n0_back.average(), 
-    #                 all_n1_back.average(), 
-    #                 all_n2_back.average(), 
-    #                 all_n3_back.average(), 
-    #                 all_hit.average(), 
-    #                 all_miss.average(), 
-    #                 all_fa.average()]
+    evokeds_list = [all_n0_back.average(), 
+                    all_n1_back.average(), 
+                    all_n2_back.average(), 
+                    all_n3_back.average(), 
+                    all_hit.average(), 
+                    all_miss.average(), 
+                    all_fa.average()]
     evokeds_list = [all_hit.average(), 
                     all_miss.average(), 
                     all_fa.average(),
-                    all_tn.average()]
-    conds = ('hit', 'true_negative')
+                    all_cr.average()]
+    conds = ('hit', 'correct_rejection')
     evks = dict(zip(conds, evokeds_list))
-    conds = ('0/true_negative', '0/hit', '0/miss', '0/false_alarm',
-            '1/true_negative', '1/hit', '1/miss', '1/false_alarm',
-            '2/true_negative', '2/hit', '2/miss', '2/false_alarm',
-            '3/true_negative', '3/hit', '3/miss', '3/false_alarm')
+    conds = ('0/correct_rejection', '0/hit', '0/miss', '0/false_alarm',
+            '1/correct_rejection', '1/hit', '1/miss', '1/false_alarm',
+            '2/correct_rejection', '2/hit', '2/miss', '2/false_alarm',
+            '3/correct_rejection', '3/hit', '3/miss', '3/false_alarm')
+    
     evks = dict(zip(conds, evokeds_list))
 
     mne.viz.plot_compare_evokeds(
         evks,time_unit='ms',
-        colors=dict(hit=0, true_negative=1))
+        colors=dict(hit=0, correct_rejection=1))
     # for evk in evokeds_list:
     #     evk.plot(picks='eeg')
     mne.viz.plot_compare_evokeds(
         all_hit.average(),time_unit='ms',
-        colors=dict(hit=0, true_negative=1))
+        colors=dict(hit=0, correct_rejection=1))
     
     
     def custom_func(x):

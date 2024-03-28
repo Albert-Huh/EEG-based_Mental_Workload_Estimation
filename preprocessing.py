@@ -193,7 +193,7 @@ class Indepndent_Component_Analysis:
             print('Warning: ECG indices were not found.')
         return eog_indices if 'eog_indices' in locals() else [], eog_scores if 'eog_scores' in locals() else [], ecg_indices if 'ecg_indices' in locals() else [], ecg_scores if 'ecg_scores' in locals() else []
 
-    def perfrom_ICA(self):
+    def perfrom_ICA(self, exclude=None):
         eog_indices, ecg_indices = [], []
         self.setup_ICA()
         # self.visualize_ICA_components() # Comment while debugging
@@ -201,9 +201,10 @@ class Indepndent_Component_Analysis:
             eog_treshold='auto', ecg_treshold='auto', reject_by_annotation=True,
             measure='correlation', plot_fig=False, verbose='warning')
         print(eog_indices + ecg_indices)
-        self.visualize_ICA_components()
+        # self.visualize_ICA_components()
         self.exclude_ica(eog_indices + ecg_indices)
-        exclude = list(input('Components to exclude: ').split(','))
+        if exclude == None:
+            exclude = list(input('Components to exclude: ').split(','))
         self.ica.exclude = [int(x) for x in exclude]
         print(self.ica.exclude)
         self.ica.plot_overlay(self.raw, exclude=self.ica.exclude, picks='eeg')
