@@ -355,41 +355,41 @@ def n_back_analysis():
     # plt.show()
     
     # TODO: USE Grand average across all runs for each band power
-    fig, axes = plt.subplots(1, 3, sharex='all',
-                             gridspec_kw=dict(left=0.2, right=0.8, bottom=0.1, top=0.9),
-                             figsize=(10,5))
-    sns.barplot(data=psd_info_df, x='n', y='theta band power', label='Theta Band Power', ax=axes[0])
-    sns.barplot(data=psd_info_df, x='n', y='alpha band power', label='Alpha Band Power', ax=axes[1])
-    sns.barplot(data=psd_info_df, x='n', y='beta band power', label='Beta Band Power', ax=axes[2])
+    # fig, axes = plt.subplots(1, 3, sharex='all',
+    #                          gridspec_kw=dict(left=0.2, right=0.8, bottom=0.1, top=0.9),
+    #                          figsize=(10,5))
+    # sns.barplot(data=psd_info_df, x='n', y='theta band power', label='Theta Band Power', ax=axes[0])
+    # sns.barplot(data=psd_info_df, x='n', y='alpha band power', label='Alpha Band Power', ax=axes[1])
+    # sns.barplot(data=psd_info_df, x='n', y='beta band power', label='Beta Band Power', ax=axes[2])
 
-    # Combine the plots into one figure
-    fig.suptitle('Band Powers vs. n-back Trials')
-    fig.subplots_adjust(wspace=0.5)
-    fig.show()
-    
-    # Save the figure
-    fig.savefig('images/band_powers_vs_n_back_trials_2.png')
-
-    
-    # TODO: USE; Do not use this too much because this method is painfully slow
-    # psd_simple_df = psd_info_df.drop(['theta band power', 'alpha band power', 'beta band power', 'run'], axis=1)
-    # theta_exploded_df = (psd_simple_df.drop(['alpha', 'beta', 'alpha freq', 'beta freq'], axis=1)).explode(['theta', 'theta freq'])
-    # alpha_exploded_df = (psd_simple_df.drop(['theta', 'beta', 'theta freq', 'beta freq'], axis=1)).explode(['alpha', 'alpha freq'])
-    # beta_exploded_df = (psd_simple_df.drop(['theta', 'alpha', 'theta freq', 'alpha freq'], axis=1)).explode(['beta', 'beta freq'])
-
-    # fig, axes = plt.subplots(1, 3, figsize=(14,4))
-    # sns.lineplot(data=theta_exploded_df, x='theta freq', y='theta', hue='n', ax=axes[0])
-    # axes[0].set_title('Theta Band')
-    # sns.lineplot(data=alpha_exploded_df, x='alpha freq', y='alpha', hue='n', ax=axes[1], legend=False)
-    # axes[1].set_title('Alpha Band')
-    # sns.lineplot(data=beta_exploded_df, x='beta freq', y='beta', hue='n', ax=axes[2], legend=False)
-    # axes[2].set_title('Beta Band')
-    
-    # fig.subplots_adjust(hspace=0.6)
+    # # Combine the plots into one figure
+    # fig.suptitle('Band Powers vs. n-back Trials')
+    # fig.subplots_adjust(wspace=0.5)
     # fig.show()
     
     # # Save the figure
-    # fig.savefig('images/individual_psd_vs_frequency_2.png')
+    # fig.savefig('images/band_powers_vs_n_back_trials_2.png')
+
+    
+    # TODO: USE; Do not use this too much because this method is painfully slow
+    psd_simple_df = psd_info_df.drop(['theta band power', 'alpha band power', 'beta band power', 'run'], axis=1)
+    theta_exploded_df = (psd_simple_df.drop(['alpha', 'beta', 'alpha freq', 'beta freq'], axis=1)).explode(['theta', 'theta freq'])
+    alpha_exploded_df = (psd_simple_df.drop(['theta', 'beta', 'theta freq', 'beta freq'], axis=1)).explode(['alpha', 'alpha freq'])
+    beta_exploded_df = (psd_simple_df.drop(['theta', 'alpha', 'theta freq', 'alpha freq'], axis=1)).explode(['beta', 'beta freq'])
+
+    fig, axes = plt.subplots(1, 3, figsize=(14,4))
+    sns.lineplot(data=theta_exploded_df, x='theta freq', y='theta', hue='n', ax=axes[0])
+    axes[0].set_title('Theta Band')
+    sns.lineplot(data=alpha_exploded_df, x='alpha freq', y='alpha', hue='n', ax=axes[1])
+    axes[1].set_title('Alpha Band')
+    sns.lineplot(data=beta_exploded_df, x='beta freq', y='beta', hue='n', ax=axes[2], legend=False)
+    axes[2].set_title('Beta Band')
+    
+    fig.subplots_adjust(hspace=0.6)
+    fig.show()
+    
+    # Save the figure
+    fig.savefig('images/individual_psd_vs_frequency_2.png')
     
     # Complete visualization
     # psd = epoch['{}'.format(epoch_num)].compute_psd()
