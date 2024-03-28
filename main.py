@@ -92,7 +92,6 @@ def n_back_analysis():
     # initilize epoch and event lists
     run_list = []
     epochs_list = []
-    target_epoch_list = []
     events_list = []
     report_list = []
     criterion_list = []
@@ -102,13 +101,13 @@ def n_back_analysis():
     for file_name in raw_data_list:
         if file_name.endswith('.txt'):
             report_path = os.path.join(data_folder_path, file_name)
-            # n_back_report = nback(report_path=report_path)
-            lines = nback.read_report_txt(report_path=report_path)
-            key_list = nback.get_nback_key(full = False)
-            report = nback.get_nback_report_data(lines, key_list, full = False)
-            # criterion = nback.create_criterion_list()
+            n_back_report = nback(report_path=report_path)
+            lines = n_back_report.read_report_txt(report_path=report_path)
+            key_list = n_back_report.get_nback_key(full = False)
+            report = n_back_report.get_nback_report_data(lines, key_list, full = False)
+            criterion = n_back_report.create_criterion_list()
             report_list.append(report)
-            # criterion_list.append(criterion)
+            criterion_list.append(criterion)
     for file_name in raw_data_list:        
         if file_name.endswith('eeg_raw.fif'):
             run_idx = int(file_name.split('run-')[1].split('_eeg_raw.fif')[0])
@@ -132,7 +131,7 @@ def n_back_analysis():
             
             ############### Signal Processing ###############
             # bandpass filtering
-            filters = preprocessing.Filtering(raw=raw, l_freq=3, h_freq=50)
+            filters = preprocessing.Filtering(raw=raw, l_freq=2, h_freq=50)
             raw = filters.external_artifact_rejection(resample=False, notch=False)
             # raw.plot(block=False, title='raw')
 
@@ -141,20 +140,22 @@ def n_back_analysis():
             reconst_raw.plot(block=True)
             debug'''
 
+            '''
             # perform regression to correct EOG artifacts
-            '''# EOGRegression without refference EEG
+            # EOGRegression without refference EEG
             raw_eeg = raw[:4, :][0]
+            raw_eeg = raw_eeg - np.mean(raw_eeg, axis =0, keepdims=True)
             raw_eog = raw[4:, :][0]
+            raw_eog = raw_eog - np.mean(raw_eog, axis =0, keepdims=True)
             b = np.linalg.inv(raw_eog @ raw_eog.T) @ raw_eog @ raw_eeg.T
             # b = np.linalg.solve(raw_eog @ raw_eog.T, raw_eog @ raw_eeg.T)
             print(b.shape)
             print(b.T)
             eeg_corrected = (raw_eeg.T - raw_eog.T @ b).T
-            raw_clean1 = raw.copy()
-            raw_clean1._data[:4, :] = eeg_corrected
-            raw_clean1.plot(block=False, title='raw_clean1')
-            '''
+            raw_clean = raw.copy()
+            raw_clean._data[:4, :] = eeg_corrected
 
+            '''
             # mne EOGRegression requires eeg refference
             raw_car = raw.copy().set_eeg_reference(ref_channels='average', projection=False, ch_type='eeg')
             model_plain = mne.preprocessing.EOGRegression(picks='eeg', picks_artifact='eog').fit(raw_car)
@@ -163,7 +164,9 @@ def n_back_analysis():
 
             raw_clean = model_plain.apply(raw_car)
 
+
             # Show the corrected data
+            # raw.plot(block=False, title='raw')
             # raw_clean.plot(block=True, title='raw_clean')
             
             # resmaple raw
@@ -174,58 +177,72 @@ def n_back_analysis():
 
 
             ############### Create Event & Import N-bsck Report Data ###############
-            # remove overlapping events and get reaction time
+            # remove overlapping events
             remv_idx = []
-            reaction_time = []
             annot = raw_clean.annotations
             for i in range(len(annot.onset)-1):
                 del_t = annot.onset[i+1] - annot.onset[i]
                 # get overlapping events idx
                 if del_t < 1/new_sfreq:
                     remv_idx.append(i)
-                else:
-                    # get reaction time
-                    if annot.description[i].isdigit() and annot.description[i+1].startswith('response_'):
-                        # remove too slow responses
-                        '''
-                        The fastest (simple) reaction time to a stimulus 
-                        is about 100 milliseconds, and the time it takes 
-                        for a sensory stimulus to become conscious is 
-                        typically a few hundred milliseconds. 
-                        This makes sense in the environment in which 
-                        human beings evolved.
-                        '''
-                        if 2.0> del_t > 0.1:
-                            reaction_time.append([del_t, annot.description[i], annot.description[i+1]])
             # remove overlapping events
             raw_clean.annotations.delete(remv_idx)
-            reaction_time_list.append(reaction_time)
 
-            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3, 'fixation': 10, 'response_alpha': 100, 'response_pos': 101}
+            custom_mapping = {'0': 0, '1': 1, '2': 2, '3': 3,
+                              'fixation': 40, 'response_alpha': 100, 'response_pos': 101}
             events, event_dict = mne.events_from_annotations(raw_clean, event_id=custom_mapping)
-            events = mne.pick_events(events, exclude=[10,100,101])
-            event_dict = {key: event_dict[key] for key in event_dict if key not in ['fixation', 'response_alpha','response_pos']}
-            if run_idx <3:
-                idx = run_idx-1
-            else:
-                idx = 2
-            # critetion_events = events[:,2] = criterion_list[idx]
-            # critetion_events = mne.pick_events(critetion_events, exclude=[0,1,2,3])
-            # critetion_event_dict = {'hit': 100, 'miss': 200, 'false_alarm': 300}
+            # events = mne.pick_events(events, exclude=[40,100,101])
+            for i, re in enumerate(report_list):
+                if re['run'] == run_idx:
+                    k = 0
+                    for j in range(len(events)):
+                        if events[j,2] not in [40, 100, 101]:
+                            events[j,2] += criterion_list[i][k]
+                            k += 1
+                    # events[:,2] += criterion_list[i]
+            new_event_dict = {'0/true_negative': 0, '0/hit': 10, '0/miss': 20, '0/false_alarm': 30,
+                              '1/true_negative': 1, '1/hit': 11, '1/miss': 21, '1/false_alarm': 31,
+                              '2/true_negative': 2, '2/hit': 12, '2/miss': 22, '2/false_alarm': 32,
+                              '3/true_negative': 3, '3/hit': 13, '3/miss': 23, '3/false_alarm': 33,
+                              'fixation': 40, 'response_alpha': 100, 'response_pos': 101}
+                        
+            # get reaction time
+            rt_event_dict = {key: new_event_dict[key] for key 
+                             in new_event_dict if key 
+                             not in ['0/true_negative','0/miss','1/true_negative','1/miss',
+                              '2/true_negative','2/miss','3/true_negative','3/miss','fixation']}
+            rt_event_dict = {y: x for x, y in rt_event_dict.items()}
+            new_annot = mne.annotations_from_events(events=events, sfreq=new_sfreq, event_desc=rt_event_dict)
+            reaction_time = []
+            for i in range(len(new_annot.onset)-1):
+                # get reaction time
+                del_t = new_annot.onset[i+1] - new_annot.onset[i]
+                if new_annot.description[i][0].isdigit() and new_annot.description[i+1].startswith('response_'):
+                    # remove too slow responses
+                    '''
+                    The fastest (simple) reaction time to a stimulus 
+                    is about 100 milliseconds, and the time it takes 
+                    for a sensory stimulus to become conscious is 
+                    typically a few hundred milliseconds. 
+                    This makes sense in the environment in which 
+                    human beings evolved.
+                    '''
+                    if 2.0> del_t > 0.1:
+                        reaction_time.append([del_t, new_annot.description[i], new_annot.description[i+1]])
+                elif new_annot.description[i][0].isdigit() and new_annot.description[i+1][0].isdigit():
+                    reaction_time.append([1.8, new_annot.description[i], 'time_out'])
+            reaction_time_list.append(reaction_time)
+            # critetion_event_dict = {'hit': +10, 'miss': +20, 'false_alarm': +30}
             tmin, tmax = -0.2, 1.6 # tmin, tmax = -0.1, 1.5 (band-power)
             reject = dict(eeg=80e-6)      # unit: V (EEG channels)
-            epochs = mne.Epochs(raw=raw_clean, events=events, event_id=event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
-            # target_epochs = mne.Epochs(raw=raw_clean, events=critetion_events, event_id=critetion_event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None)
+            epochs = mne.Epochs(raw=raw_clean, events=events, event_id=new_event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None, on_missing='ignore')
             baseline_tmin, baseline_tmax = -0.1, 0
             baseline = (baseline_tmin, baseline_tmax)
             epochs.apply_baseline(baseline)
-            # target_epochs.apply_baseline(baseline)
             
             epochs_list.append(epochs)
             events_list.append(events)
-            # target_epoch_list.append(target_epochs)
     del raw, raw_clean, epochs  # free up memory
-
     # fatigue and sleepniess questionnarie
     '''
     Initial survey, after run surveys
@@ -250,22 +267,18 @@ def n_back_analysis():
         'Physical Discomfort': [4,3,6,6],
         'Lack of Motivation': [2,1,7,3],
         'Sleepiness': [4,1,3,2]} # run 0 1 2 4
+    survey6 = {'Lack of Energy': [4,7,8,9],
+        'Physical Exertion': [5,5,4,6],
+        'Physical Discomfort': [3,7,8,9],
+        'Lack of Motivation': [5,7,8,9],
+        'Sleepiness': [2,2,6,0]} # run 0 1 2 4
 
     ############### FEATURE ANALYSIS ###############
-    reaction_time_run = []
-    for run in reaction_time_list:
-        temp = [[0],[0],[0],[0]]
-        for i in range(len(run)):
-            n = int(run[i][1])
-            temp[n].append(run[i][0])
-        temp = [sum(x)/len(x) for x in temp]
-        reaction_time_run.append(temp)
-    grand_avg_reaction_time = np.array(reaction_time_run).mean(axis=0)
-    
+    # debug
     # df = pd.DataFrame.from_dict(report)
     # df.index.name = 'block'
     
-    
+
     run_ids = []
     frames = []
     for run_id, r in enumerate(report_list, 1):
@@ -273,7 +286,7 @@ def n_back_analysis():
         temp_df = pd.DataFrame(r)
         temp_df[['Hit','Miss', 'False Alarm']] = pd.DataFrame(temp_df.criterion.tolist(), index= temp_df.index)
         temp_df = pd.concat([temp_df.drop(['nasa_tlx', 'criterion'], axis=1), temp_df['nasa_tlx'].apply(pd.Series)], axis=1)
-        temp_df.rename(columns={'nback_sequence':'N'}, inplace=True)
+        temp_df.rename(columns={'run':'Run_id','nback_sequence':'N'}, inplace=True)
         temp_df[['N']] = temp_df[['N']].astype(str)
         temp_df['Total TLX'] = temp_df['Mental Demand'] + temp_df['Physical Demand'] + temp_df['Temporal Demand'] + temp_df['Performance'] + temp_df['Effort'] + temp_df['Frustration']
         frames.append(temp_df)
@@ -281,45 +294,82 @@ def n_back_analysis():
     df.index.names = ['Run','Trial']
     df = df.reset_index()
     print(df)
+    
+    # p = sns.catplot(
+    #     data=df, x='N', y='Total TLX', col='Run',
+    #     kind='bar', height=5, aspect=0.6,order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.show()
 
-    p = sns.catplot(
-        data=df, x='N', y='Total TLX', col='Run',
-        kind='bar', height=5, aspect=0.6,order=['0','1','2','3'])
-    p.despine(offset=5, trim=True)
-    plt.show()
-
-    p = sns.catplot(
-        data=df, x='Trial', y='Total TLX', col='Run',
-        kind='point', height=5, aspect=0.8,)
-    p.despine(offset=5, trim=True)
-    plt.show()
+    # p = sns.catplot(
+    #     data=df, x='Trial', y='Total TLX', col='Run',
+    #     kind='point', height=5, aspect=0.8,)
+    # p.despine(offset=5, trim=True)
+    # plt.show()
 
     df2 = df.drop(['Hit', 'Miss', 'False Alarm', 'Total TLX'], axis=1)
-    df2 = df2.melt(['Run','Trial', 'N'])
+    df2 = df2.melt(['Run','Trial', 'Run_id', 'N'])
     df2.rename(columns={'variable':'Questionnaire', 'value': 'Scale'}, inplace=True)
     print(df2)
 
-    p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N', row='Run',
-                    kind='bar', height=5, aspect=2.0,hue_order=['0','1','2','3'])
-    p.despine(offset=5, trim=True)
-    plt.show()
+    # p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N', row='Run',
+    #                 kind='bar', height=5, aspect=2.0,hue_order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.show()
 
-    p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N',
-                    kind='bar', height=5, aspect=4.0,hue_order=['0','1','2','3'])
-    p.despine(offset=5, trim=True)
-    plt.show()
+    # p = sns.catplot(data=df2, x='Questionnaire', y='Scale', hue='N',
+    #                 kind='bar', height=5, aspect=4.0,hue_order=['0','1','2','3'])
+    # p.despine(offset=5, trim=True)
+    # plt.show()
+
+    rt_list = []
+    for rt in reaction_time_list:
+        rt_run = np.zeros((4,3))
+        temp_hit = [[0],[0],[0],[0]]
+        temp_fa = [[0],[0],[0],[0]]
+        for i in range(len(rt)):
+            cond = rt[i][1]
+            n = int(cond[0])
+            if cond.endswith('hit'):
+                temp_hit[n].append(rt[i][0])
+            elif cond.endswith('false_alarm'):
+                temp_fa[n].append(rt[i][0])
+        for i in range(4):
+            h = temp_hit[i]
+            f = temp_fa[i]
+            if len(h) == 1:
+                rt_run[i,0] = np.nan
+            else:
+                rt_run[i,0] = np.sum(h)/(len(h)-1)
+            if len(f) == 1:
+                rt_run[i,1] = np.nan
+            else:
+                rt_run[i,1] = np.sum(f)/(len(f)-1)
+            total = temp_hit[i] + temp_fa[i]
+            if len(total) == 2:
+                rt_run[i,2] = np.nan
+            else:
+                rt_run[i,2] = np.sum(total)/(len(total)-2)
+        rt_list.append(rt_run)
+    rt_list = [pd.DataFrame(x) for x in rt_list]
+    df4 = pd.concat(rt_list, keys=run_ids)
+    df4.index.names = ['Run','N']
+    df4 = df4.reset_index()
+    df4.rename(columns={0:'RT:Hit', 1:'RT:False Alarm', 2:'RT'}, inplace=True)
+    print(df4)
 
     df3 = df.drop(['Trial','Mental Demand', 'Physical Demand', 'Temporal Demand', 'Performance', 'Effort', 'Frustration', 'Total TLX'], axis=1)
     df3['TN'] = 20 - df3['Hit'] - df3['Miss'] - df3['False Alarm']
-    df3 = df3.melt(['Run','N'])
+    df3 = df3.melt(['Run','N', 'Run_id'])
     df3.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
     df3 = pd.pivot_table(df3, values='Count', index=['Run','N'], columns='Criterion', aggfunc='sum')
     df3['Detection Rate'] = df3['Hit']/(df3['Hit'] + df3['Miss'])
     df3['False Alarm Rate'] = df3['False Alarm']/(df3['False Alarm'] + df3['TN'])
     df3 = df3.reset_index()
     df3 = df3.rename_axis(None, axis=1)
+    cols_to_use = df4.columns.difference(df3.columns)
+    df3 = pd.merge(df3, df4[cols_to_use], left_index=True, right_index=True, how='outer')
     print(df3)
-
     p = sns.catplot(
         data=df3, x='N', y='Detection Rate', col='Run',
         kind='bar', height=5, aspect=0.8, order=['0','1','2','3'])
@@ -344,10 +394,9 @@ def n_back_analysis():
     p.despine(offset=5, trim=True)
     plt.show()
 
-    debug
+
     # concatenate all epochs from different trials
     all_epochs = mne.concatenate_epochs(epochs_list)
-    all_target_epochs = mne.concatenate_epochs(target_epochs_list)
     # all_epochs = all_epochs['0', '1', '2', '3']
 
     # visualize epoch
@@ -355,30 +404,51 @@ def n_back_analysis():
     all_n1_back = all_epochs['1']
     all_n2_back = all_epochs['2']
     all_n3_back = all_epochs['3']
-    all_hit = all_target_epochs['hit']
-    all_miss = all_target_epochs['miss']
-    all_fa = all_target_epochs['false_alarm']
+    all_hit = all_epochs['hit']
+    all_miss = all_epochs['miss']
+    all_fa = all_epochs['false_alarm']
+    all_tn = all_epochs['true_negative']
 
     epcs = [all_n0_back, all_n1_back, all_n2_back, all_n3_back]
     # for epc in epcs:
     #     epc.plot_image(picks='eeg', combine='std')
 
     # evoked analysis
-    evokeds_list = [all_n0_back.average(), all_n1_back.average(), all_n2_back.average(), all_n3_back.average()]
-    target_evokeds_list = [all_hit.average(), all_miss.average(), all_fa.average()]
-    conds = ('0', '1', '2', '3')
-    target_conds = ('hit', 'miss', 'false_alarm')
+    # evokeds_list = [all_n0_back.average(), 
+    #                 all_n1_back.average(), 
+    #                 all_n2_back.average(), 
+    #                 all_n3_back.average(), 
+    #                 all_hit.average(), 
+    #                 all_miss.average(), 
+    #                 all_fa.average()]
+    evokeds_list = [all_hit.average(), 
+                    all_miss.average(), 
+                    all_fa.average(),
+                    all_tn.average()]
+    conds = ('hit', 'true_negative')
     evks = dict(zip(conds, evokeds_list))
-    target_evks = dict(zip(conds, evokeds_list))  
-    def custom_func(x):
-        return x.max(axis=1)
+    conds = ('0/true_negative', '0/hit', '0/miss', '0/false_alarm',
+            '1/true_negative', '1/hit', '1/miss', '1/false_alarm',
+            '2/true_negative', '2/hit', '2/miss', '2/false_alarm',
+            '3/true_negative', '3/hit', '3/miss', '3/false_alarm')
+    evks = dict(zip(conds, evokeds_list))
 
-    for combine in ('mean', 'median', 'gfp', custom_func):
-        mne.viz.plot_compare_evokeds(evks, picks='eeg', combine=combine)
-        mne.viz.plot_compare_evokeds(target_evks, picks='eeg', combine=combine)
-
+    mne.viz.plot_compare_evokeds(
+        evks,time_unit='ms',
+        colors=dict(hit=0, true_negative=1))
     # for evk in evokeds_list:
     #     evk.plot(picks='eeg')
+    mne.viz.plot_compare_evokeds(
+        all_hit.average(),time_unit='ms',
+        colors=dict(hit=0, true_negative=1))
+    
+    
+    def custom_func(x):
+        return x.max(axis=1)
+    for combine in ('mean', 'median', 'gfp', custom_func):
+        mne.viz.plot_compare_evokeds(evks, picks='eeg', combine=combine)
+
+
     '''
     freqs = np.arange(3, 50)  # frequencies from 3-50Hz
     vmin, vmax = -1, 1  # set min and max ERDS values in plot

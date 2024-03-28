@@ -304,8 +304,11 @@ class N_back_report:
         if not isinstance(report_path, str):
             raise TypeError
         self.report_path = report_path
+        self.full = False
     
-    def read_report_txt(report_path: str):
+    def read_report_txt(self, report_path: str):
+        if report_path == None:
+            report_path = self.report_path
         file = open(report_path, 'r')
         # read .txt file line by line
         content = list(file)
@@ -316,7 +319,9 @@ class N_back_report:
         file.close()
         return lines # list of str
 
-    def get_nback_key(full: bool = False):
+    def get_nback_key(self, full: bool = None):
+        if full == None:
+            full = self.full
         # get the list of indication stings to extract data
         if full == True:
             key_alpha_solution = 'Alpha Answer: '
@@ -332,12 +337,13 @@ class N_back_report:
             key_list = [key_nasa_tlx, key_criterion] # list of str
         return key_list # list of str
 
-    def get_nback_report_data(lines: list, key_list: list, full: bool = False):
+    def get_nback_report_data(self, lines: list, key_list: list, full: bool = False):
         # get the list of nback sequence
         nback_sequence = lines[5] # Sequence is on line 6
         sequence = [int(s) for s in list(nback_sequence) if s.isdigit()]
         # create report dict data object
         report = {}
+        report['run'] = int(lines[0][-1])
         if full == True:
             report['nback_sequence'] = sequence
             report['sol_alphabet'] = []
@@ -384,33 +390,37 @@ class N_back_report:
                             report['criterion'].append(criterion)
         return report # dict of list
     
-    def create_criterion_list(self):
+    def create_criterion_list(self, report_path: str = None):
         pass
         """
         Get np.array of criterion array.
         """
-        lines = self.read_report_txt(self.report_path)
+        if report_path == None:
+            report_path = self.report_path
+        lines = self.read_report_txt(report_path)
         key_list = self.get_nback_key(full = True)
         report = self.get_nback_report_data(lines, key_list, full = True)
         
-        event_id = np.zeros((len(report['nback_sequence']),1), int) # hit:100, miss:200, fa:300
+         
         sol_alpha = [item for block in report['sol_alphabet'] for item in block]
         sol_pos = [item for block in report['sol_position'] for item in block]
         user_alpha = [item for block in report['user_alphabet'] for item in block]
         user_pos = [item for block in report['user_position'] for item in block]
-        
+        event_id = np.zeros((len(sol_alpha)), int)
+
+        # hit:100, miss:200, fa:300
         for i in range(len(sol_alpha)):
             if sol_alpha[i] and user_alpha[i]:
-                event_id[i] = 100
+                event_id[i] = 10
             elif sol_alpha[i] and user_alpha[i] == False:
-                event_id[i,2] = 200
+                event_id[i] = 20
             elif sol_alpha[i] == False and user_alpha[i]:
-                event_id[i,2] = 300
+                event_id[i] = 30
 
             if sol_pos[i] and user_pos[i]:
-                event_id[i] = 100
+                event_id[i] = 10
             elif sol_pos[i] and user_pos[i] == False:
-                event_id[i,2] = 200
+                event_id[i] = 20
             elif sol_pos[i] == False and user_pos[i]:
-                event_id[i,2] = 300
+                event_id[i] = 30
         return event_id
