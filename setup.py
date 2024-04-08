@@ -37,7 +37,17 @@ class Setup:
                                          jitter_break_threshold_samples=50)
         #fix bad xdf streams
         streams = self._xdf_tiebreak(streams)
+        streams = streams[0:14]
+        fig, ax = plt.subplots(nrows=len(streams))
+        fig.suptitle('Raw XDF')
+        for i, stream in enumerate(streams):
+            ax[i].plot(stream['time_stamps'],stream['time_series'].T[0,:],label=i)
+            ax[i].set_xlabel('Time (s)')
+            ax[i].set_ylabel('Signal')
+        plt.show()
+        debug
         streams = self._drop_bad_stream(streams)
+        debug
 
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
@@ -214,7 +224,7 @@ class Setup:
                 raw_dict[key]
         return raw_dict # dict of mne.io.Raw
 
-    def _xdf_tiebreak(streams):
+    def _xdf_tiebreak(self, streams):
         names = []
         '''fig, ax = plt.subplots(nrows=2)
         fig.suptitle('time_stamps')'''
@@ -252,14 +262,19 @@ class Setup:
         unique_names = np.unique(names)
         for name in unique_names:
             candidate_ids = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'name': name}])
-            candidate_streams = [stream for stream in streams if stream['info']['stream_id'] in candidate_ids]
+            candidate_streams = [stream for stream in streams if stream['info']['stream_id'] in candidate_ids and len(stream['time_series'])>1]
             stream_len = [len(stream['time_series']) for stream in candidate_streams]
-            max_stream_len = max(stream_len)
-            winner_idx = stream_len.index(max_stream_len)
-            winning_streams.append(candidate_streams[winner_idx])
+            stamp_min = [min(stream['time_stamps']) for stream in candidate_streams]
+            winner_idx = sorted(range(len(stamp_min)), key=lambda k: stamp_min[k])
+            winners = [candidate_streams[i] for i in winner_idx]
+            # max_stream_len = max(stream_len)
+            # winner_idx = stream_len.index(max_stream_len)
+            # winning_streams.append(candidate_streams[winner_idx])
+            for winner in winners:
+                winning_streams.append(winner)
         return winning_streams
     
-    def _drop_bad_stream(streams):
+    def _drop_bad_stream(self, streams):
         # drop empty stream
         for stream in streams:
             if np.any(stream['time_stamps']) == False:

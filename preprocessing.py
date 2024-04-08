@@ -207,7 +207,7 @@ class Indepndent_Component_Analysis:
             exclude = list(input('Components to exclude: ').split(','))
         self.ica.exclude = [int(x) for x in exclude]
         print(self.ica.exclude)
-        self.ica.plot_overlay(self.raw, exclude=self.ica.exclude, picks='eeg')
+        # self.ica.plot_overlay(self.raw, exclude=self.ica.exclude, picks='eeg')
         reconst_raw = self.raw.copy()
         self.ica.apply(reconst_raw)
         return reconst_raw

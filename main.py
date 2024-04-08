@@ -17,7 +17,7 @@ mpl.rcParams.update(new_rc_params)
 ############### IMPORT & CONVERT DATA ###############
 def prep_data():
     # get list of raw data file names in local data folder
-    subject_idx = '1'
+    subject_idx = '6'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -562,6 +562,6 @@ def n_back_analysis():
 
 
 if __name__ == '__main__':
-    # prep_data()
+    prep_data()
     # eye_oc()
-    n_back_analysis()
+    # n_back_analysis()

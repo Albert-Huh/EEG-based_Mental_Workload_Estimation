@@ -87,7 +87,7 @@ for s_id in subject_ids:
             # raw_clean.plot(block=True, title='raw_clean')
             
             # resmaple raw
-            new_sfreq = 200
+            new_sfreq = 240
             raw_clean = raw_clean.resample(sfreq=new_sfreq)
             # raw_clean = raw.resample(sfreq=new_sfreq)
             raw_clean.load_data()
@@ -150,7 +150,7 @@ for s_id in subject_ids:
                     reaction_time.append([1.8, new_annot.description[i], 'time_out'])
             reaction_time_list.append(reaction_time)
             # critetion_event_dict = {'hit': +10, 'miss': +20, 'false_alarm': +30}
-            tmin, tmax = -0.2, 1.6 # tmin, tmax = -0.1, 1.5 (band-power)
+            tmin, tmax = -0.2, 1.2 # tmin, tmax = -0.1, 1.5 (band-power)
             reject = dict(eeg=60e-6)      # unit: V (EEG channels)
             epochs = mne.Epochs(raw=raw_clean, events=events, event_id=new_event_dict, event_repeated='drop', tmin=tmin, tmax=tmax, preload=True, reject=reject, picks='eeg', baseline=None, on_missing='ignore')
             baseline_tmin, baseline_tmax = -0.15, 0
@@ -326,12 +326,12 @@ mne.viz.plot_compare_evokeds(evks,picks='eeg',
 psd_info_df = pd.DataFrame()
 for n in range(4):  # Go through each n-back trial
     data = all_epochs['{}'.format(n)].get_data(copy=True)    # There should be 4 
-    psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=200, fmin=4, fmax=30)
+    psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=new_sfreq, fmin=3, fmax=30)
     psds = psd_extraction[0] * 1e12     # Put the units on a micro volt ^ 2 scale
     freqs = psd_extraction[1]
     
     theta_lb, theta_ub = 4, (np.where(freqs <= 8))[0][-1]
-    alpha_lb, alpha_ub = (theta_ub + 1), (np.where(freqs <= 13))[0][-1]
+    alpha_lb, alpha_ub = (theta_ub + 1), (np.where(freqs <= 12))[0][-1]
     beta_lb, beta_ub = (alpha_ub + 1), (np.where(freqs <= 30))[0][-1]
     
     # PSDs construction:
@@ -351,7 +351,9 @@ for n in range(4):  # Go through each n-back trial
         theta_freq =  freqs[theta_lb:theta_ub]
         alpha_freq = freqs[alpha_lb:alpha_ub]
         beta_freq = freqs[beta_lb:beta_ub]
-        
+        theta_bp = np.trapz(y=theta, x=theta_freq)
+        alpha_bp = np.trapz(y=alpha, x=alpha_freq)
+        beta_bp = np.trapz(y=beta, x=beta_freq)
         info = dict({
             'n' : n,
             'theta' : theta,
@@ -360,30 +362,36 @@ for n in range(4):  # Go through each n-back trial
             'theta freq' : theta_freq,
             'alpha freq' : alpha_freq,
             'beta freq' : beta_freq,
-            'theta band power' :  np.trapz(y=theta, x=theta_freq),
-            'alpha band power' : np.trapz(y=alpha, x=alpha_freq),
-            'beta band power' : np.trapz(y=beta, x=beta_freq)
+            'theta band power' :  theta_bp,
+            'alpha band power' : alpha_bp,
+            'beta band power' : beta_bp,
+            '(theta+beta)/alpha' :  (theta_bp+beta_bp)/alpha_bp,
+            'theta/(alpha+beta)' : theta_bp/(alpha_bp+beta_bp),
+            'beta/(theta+alpha)' : beta_bp/(theta_bp+alpha_bp)
         })
         
         psd_info_df = pd.concat([psd_info_df, pd.DataFrame([info])], ignore_index=True)
-fig, axes = plt.subplots(1, 3, sharex='all',
+fig, axes = plt.subplots(2, 3, sharex='all',
                              gridspec_kw=dict(left=0.2, right=0.8, bottom=0.1, top=0.9),
                              figsize=(5,4))
-sns.barplot(data=psd_info_df, x='n', y='theta band power', label='Theta Band Power', ax=axes[0])
-sns.barplot(data=psd_info_df, x='n', y='alpha band power', label='Alpha Band Power', ax=axes[1])
-sns.barplot(data=psd_info_df, x='n', y='beta band power', label='Beta Band Power', ax=axes[2])
+sns.barplot(data=psd_info_df, x='n', y='theta band power', label='Theta Band Power', ax=axes[0,0])
+sns.barplot(data=psd_info_df, x='n', y='alpha band power', label='Alpha Band Power', ax=axes[0,1])
+sns.barplot(data=psd_info_df, x='n', y='beta band power', label='Beta Band Power', ax=axes[0,2])
+sns.barplot(data=psd_info_df, x='n', y='(theta+beta)/alpha', label='(theta+beta)/alpha', ax=axes[1,0])
+sns.barplot(data=psd_info_df, x='n', y='theta/(alpha+beta)', label='theta/(alpha+beta)', ax=axes[1,1])
+sns.barplot(data=psd_info_df, x='n', y='beta/(theta+alpha)', label='beta/(theta+alpha)', ax=axes[1,2])
 
 # Combine the plots into one figure
 fig.suptitle('Band Powers vs. N')
 fig.subplots_adjust(wspace=0.5)
 sns.despine(fig, offset=5, trim=True)
 plt.show()
-
+debug
 conds = ['hit', 'false_alarm', 'miss', 'correct_rejection']
 psd_info_df = pd.DataFrame()
 for n in conds:  # Go through each n-back trial
     data = all_epochs[n].get_data(copy=True)    # There should be 4 
-    psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=200, fmin=4, fmax=30)
+    psd_extraction = mne.time_frequency.psd_array_multitaper(x=data, sfreq=200, fmin=3, fmax=30)
     psds = psd_extraction[0] * 1e12     # Put the units on a micro volt ^ 2 scale
     freqs = psd_extraction[1]
     
