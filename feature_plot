@@ -1,0 +1,617 @@
+import os
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from scipy.stats import mannwhitneyu, ttest_ind
+
+new_rc_params = {'text.usetex': False, "svg.fonttype": 'none'}
+mpl.rcParams.update(new_rc_params)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+plt.rcParams.update({'font.size': 10})
+
+df_folder_path = os.path.join(os.getcwd(), 'data/HS_Data')
+
+feature_df = pd.read_pickle(os.path.join(df_folder_path, 'spectra_output_byrun.pkl'))
+# feature_df.sort_values(by=['subject'])
+rt_df = pd.read_pickle(os.path.join(df_folder_path, 'rt_by_run.pkl'))
+performance_df = pd.read_pickle(os.path.join(df_folder_path, 'tlx_criterion_by_trial.pkl'))
+
+feature_df = feature_df.reset_index()
+feature_df.rename(columns={'subject':'Subject','run':'Run', 'block':'Trial', 'difficulty':'N'}, inplace=True)
+feature_df[['N']] = feature_df[['N']].astype(int)
+feature_df[['Run','Trial']] += 1
+
+
+# tlx_total_df = performance_df.drop(['Run_id', 'Hit', 'Miss', 'False Alarm', 
+#                                     'Mental Demand', 'Physical Demand', 
+#                                     'Temporal Demand', 'Performance', 
+#                                     'Effort', 'Frustration'], axis=1)
+# tlx_total_df = tlx_total_df.melt(['Subject','Run','Trial', 'N'])
+# tlx_total_df.rename(columns={'variable':'Questionnaire', 'value': 'Scale'}, inplace=True)
+
+#### fig 5b
+p1 = sns.catplot(data=performance_df, x='N', y='Total TLX', 
+                 errorbar='ci', kind='bar', order=['0','1','2','3'], palette='mako_r')
+p1.despine(offset=5, trim=True)
+p1.set_xticklabels(fontsize=12)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "total_nasa_tlx.svg"
+plt.savefig(filename, format='svg')
+
+# pvalues with scipy:
+n0 = performance_df.loc[(performance_df.N == '0'), 'Total TLX'].values
+n1 = performance_df.loc[(performance_df.N == '1'), 'Total TLX'].values
+n2 = performance_df.loc[(performance_df.N == '2'), 'Total TLX'].values
+n3 = performance_df.loc[(performance_df.N == '3'), 'Total TLX'].values
+stat_results_mwu = [
+  mannwhitneyu(n0, n1, alternative='two-sided'),
+  mannwhitneyu(n1, n2, alternative='two-sided'),
+  mannwhitneyu(n2, n3, alternative='two-sided'),
+  mannwhitneyu(n0, n3, alternative='two-sided')
+]
+stat_results_ttest = [
+  ttest_ind(n0, n1, alternative='two-sided'),
+  ttest_ind(n1, n2, alternative='two-sided'),
+  ttest_ind(n2, n3, alternative='two-sided'),
+  ttest_ind(n0, n3, alternative='two-sided')
+]
+sig_symbals = ['ns']*4
+pvalues = [result.pvalue for result in stat_results_mwu]
+for i, p in enumerate(pvalues):
+    if p >= 0.05:
+        sig_symbals[i] = 'ns'
+    elif p < 0.05 and p >= 0.01:
+        sig_symbals[i] = '*'
+    elif p < 0.01 and p >= 0.001:
+        sig_symbals[i] = '**'
+    else:
+        sig_symbals[i] = '***'
+print('0 vs 1: \n', stat_results_mwu[0], stat_results_ttest[0], sig_symbals[0], '\n')
+print('1 vs 2: \n', stat_results_mwu[1], stat_results_ttest[1], sig_symbals[1], '\n')
+print('2 vs 3: \n', stat_results_mwu[2], stat_results_ttest[2], sig_symbals[2], '\n')
+print('0 vs 3: \n', stat_results_mwu[3], stat_results_ttest[3], sig_symbals[3], '\n')
+
+p2 = sns.catplot(data=performance_df, x='Subject', y='Total TLX', hue='N',
+                errorbar='ci', kind='bar', height=5, aspect=2.0,hue_order=['0','1','2','3'], palette='rocket_r')
+p2.despine(offset=5, trim=True)
+p2.set_xticklabels(fontsize=12)
+
+p3 = sns.catplot(data=performance_df, x='N', y='Mental Demand',
+                errorbar='ci', kind='bar', height=5, aspect=1,order=['0','1','2','3'], palette='rocket_r')
+p3.despine(offset=5, trim=True)
+p3.set_xticklabels(fontsize=12)
+
+'''
+p4 = sns.catplot(data=performance_df, x='Subject', y='Mental Demand', hue='N',
+                errorbar='ci', kind='bar', height=5, aspect=2.0,hue_order=['0','1','2','3'], palette='rocket_r')
+p4.despine(offset=5, trim=True)
+p4.set_xticklabels(fontsize=12)
+'''
+facet_kws = {'ylim':(0, 100)}
+tlx_ques_df = performance_df.drop(['Run_id', 'Hit', 'Miss', 'False Alarm', 'Total TLX'], axis=1)
+tlx_ques_df = tlx_ques_df.melt(['Subject','Run','Trial', 'N'])
+tlx_ques_df.rename(columns={'variable':'Questionnaire', 'value': 'Scale'}, inplace=True)
+p5 = sns.catplot(data=tlx_ques_df, x='Questionnaire', y='Scale', hue='N',
+                errorbar='ci', kind='bar', facet_kws=facet_kws, height=5, aspect=1.33,hue_order=['0','1','2','3'], palette='rocket_r')
+p5.despine(offset=5, trim=True)
+p5.set_xticklabels(fontsize=12)
+#### fig 5b
+tlx_ques_df2 = performance_df.drop(['Run_id', 'Temporal Demand','Effort', 'Frustration','Hit', 'Miss', 'False Alarm', 'Total TLX'], axis=1)
+tlx_ques_df2 = tlx_ques_df2.melt(['Subject','Run','Trial', 'N'])
+tlx_ques_df2.rename(columns={'variable':'Questionnaire', 'value': 'Scale'}, inplace=True)
+p5b = sns.catplot(data=tlx_ques_df2, x='Questionnaire', y='Scale', hue='N',
+                errorbar='ci', kind='bar', facet_kws=facet_kws, height=5, aspect=1.33,hue_order=['0','1','2','3'], palette='rocket_r')
+p5b.despine(offset=5, trim=True)
+p5b.set_xticklabels(fontsize=12)
+# pvalues with scipy:
+n0 = performance_df.loc[(performance_df.N == '0'), 'Mental Demand'].values
+n1 = performance_df.loc[(performance_df.N == '1'), 'Mental Demand'].values
+n2 = performance_df.loc[(performance_df.N == '2'), 'Mental Demand'].values
+n3 = performance_df.loc[(performance_df.N == '3'), 'Mental Demand'].values
+stat_results_mwu = [
+  mannwhitneyu(n0, n1, alternative='two-sided'),
+  mannwhitneyu(n1, n2, alternative='two-sided'),
+  mannwhitneyu(n2, n3, alternative='two-sided'),
+  mannwhitneyu(n0, n3, alternative='two-sided')
+]
+stat_results_ttest = [
+  ttest_ind(n0, n1, alternative='two-sided'),
+  ttest_ind(n1, n2, alternative='two-sided'),
+  ttest_ind(n2, n3, alternative='two-sided'),
+  ttest_ind(n0, n3, alternative='two-sided')
+]
+sig_symbals = ['ns']*4
+pvalues = [result.pvalue for result in stat_results_mwu]
+for i, p in enumerate(pvalues):
+    if p >= 0.05:
+        sig_symbals[i] = 'ns'
+    elif p < 0.05 and p >= 0.01:
+        sig_symbals[i] = '*'
+    elif p < 0.01 and p >= 0.001:
+        sig_symbals[i] = '**'
+    else:
+        sig_symbals[i] = '***'
+print('MD 0 vs 1: \n', stat_results_mwu[0], stat_results_ttest[0], sig_symbals[0], '\n')
+print('MD 1 vs 2: \n', stat_results_mwu[1], stat_results_ttest[1], sig_symbals[1], '\n')
+print('MD 2 vs 3: \n', stat_results_mwu[2], stat_results_ttest[2], sig_symbals[2], '\n')
+print('MD 0 vs 3: \n', stat_results_mwu[3], stat_results_ttest[3], sig_symbals[3], '\n')
+
+n0 = performance_df.loc[(performance_df.N == '0'), 'Physical Demand'].values
+n1 = performance_df.loc[(performance_df.N == '1'), 'Physical Demand'].values
+n2 = performance_df.loc[(performance_df.N == '2'), 'Physical Demand'].values
+n3 = performance_df.loc[(performance_df.N == '3'), 'Physical Demand'].values
+stat_results_mwu = [
+  mannwhitneyu(n0, n1, alternative='two-sided'),
+  mannwhitneyu(n1, n2, alternative='two-sided'),
+  mannwhitneyu(n2, n3, alternative='two-sided'),
+  mannwhitneyu(n0, n3, alternative='two-sided')
+]
+stat_results_ttest = [
+  ttest_ind(n0, n1, alternative='two-sided'),
+  ttest_ind(n1, n2, alternative='two-sided'),
+  ttest_ind(n2, n3, alternative='two-sided'),
+  ttest_ind(n0, n3, alternative='two-sided')
+]
+sig_symbals = ['ns']*4
+pvalues = [result.pvalue for result in stat_results_mwu]
+for i, p in enumerate(pvalues):
+    if p >= 0.05:
+        sig_symbals[i] = 'ns'
+    elif p < 0.05 and p >= 0.01:
+        sig_symbals[i] = '*'
+    elif p < 0.01 and p >= 0.001:
+        sig_symbals[i] = '**'
+    else:
+        sig_symbals[i] = '***'
+print('PD 0 vs 1: \n', stat_results_mwu[0], stat_results_ttest[0], sig_symbals[0], '\n')
+print('PD 1 vs 2: \n', stat_results_mwu[1], stat_results_ttest[1], sig_symbals[1], '\n')
+print('PD 2 vs 3: \n', stat_results_mwu[2], stat_results_ttest[2], sig_symbals[2], '\n')
+print('PD 0 vs 3: \n', stat_results_mwu[3], stat_results_ttest[3], sig_symbals[3], '\n')
+
+n0 = performance_df.loc[(performance_df.N == '0'), 'Performance'].values
+n1 = performance_df.loc[(performance_df.N == '1'), 'Performance'].values
+n2 = performance_df.loc[(performance_df.N == '2'), 'Performance'].values
+n3 = performance_df.loc[(performance_df.N == '3'), 'Performance'].values
+stat_results_mwu = [
+  mannwhitneyu(n0, n1, alternative='two-sided'),
+  mannwhitneyu(n1, n2, alternative='two-sided'),
+  mannwhitneyu(n2, n3, alternative='two-sided'),
+  mannwhitneyu(n0, n3, alternative='two-sided')
+]
+stat_results_ttest = [
+  ttest_ind(n0, n1, alternative='two-sided'),
+  ttest_ind(n1, n2, alternative='two-sided'),
+  ttest_ind(n2, n3, alternative='two-sided'),
+  ttest_ind(n0, n3, alternative='two-sided')
+]
+sig_symbals = ['ns']*4
+pvalues = [result.pvalue for result in stat_results_mwu]
+
+for i, p in enumerate(pvalues):
+    if p >= 0.05:
+        sig_symbals[i] = 'ns'
+    elif p < 0.05 and p >= 0.01:
+        sig_symbals[i] = '*'
+    elif p < 0.01 and p >= 0.001:
+        sig_symbals[i] = '**'
+    else:
+        sig_symbals[i] = '***'
+print('PF 0 vs 1: \n', stat_results_mwu[0], stat_results_ttest[0], sig_symbals[0], '\n')
+print('PF 1 vs 2: \n', stat_results_mwu[1], stat_results_ttest[1], sig_symbals[1], '\n')
+print('PF 2 vs 3: \n', stat_results_mwu[2], stat_results_ttest[2], sig_symbals[2], '\n')
+print('PF 0 vs 3: \n', stat_results_mwu[3], stat_results_ttest[3], sig_symbals[3], '\n')
+
+###
+performance_byrun_df = performance_df.drop(['Trial','Run_id','Mental Demand', 'Physical Demand', 'Temporal Demand', 'Performance', 'Effort', 'Frustration', 'Total TLX'], axis=1)
+performance_byrun_df['Correct Rejection'] = 20 - performance_byrun_df['Hit'] - performance_byrun_df['Miss'] - performance_byrun_df['False Alarm']
+performance_byrun_df = performance_byrun_df.melt(['Subject','Run','N'])
+performance_byrun_df.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
+performance_byrun_df = pd.pivot_table(performance_byrun_df, values='Count', index=['Subject','Run','N'], columns='Criterion', aggfunc='sum')
+performance_byrun_df['Detection Rate'] = performance_byrun_df['Hit']/(performance_byrun_df['Hit'] + performance_byrun_df['Miss'])
+performance_byrun_df['False Alarm Rate'] = performance_byrun_df['False Alarm']/(performance_byrun_df['False Alarm'] + performance_byrun_df['Correct Rejection'])
+performance_byrun_df['Accuracy'] = (performance_byrun_df['Hit']+performance_byrun_df['Correct Rejection'])/(performance_byrun_df['Hit']+performance_byrun_df['Correct Rejection']+performance_byrun_df['False Alarm'] + performance_byrun_df['Miss'])
+performance_byrun_df = performance_byrun_df.reset_index()
+performance_byrun_df = performance_byrun_df.rename_axis(None, axis=1)
+cols_to_use = rt_df.columns.difference(performance_byrun_df.columns)
+performance_byrun_df = pd.merge(performance_byrun_df, rt_df[cols_to_use], left_index=True, right_index=True, how='outer')
+
+performance_df[['100 - Performance']] = 100-performance_df[['Performance']]
+fig, ax1 = plt.subplots(figsize=(6.4, 4.8))
+p61=sns.pointplot(data=performance_df, x='N', y='100 - Performance',
+                color='lightcoral', linestyles='-', markers='s', order=['0','1','2','3'],ax=ax1)
+ax2 = ax1.twinx()
+p62=sns.pointplot(data=performance_byrun_df, x='N', y='Accuracy',
+    errorbar='ci', color='lightskyblue', linestyles='-', markers='s', order=['0','1','2','3'], ax=ax2)
+ax1.set_ylim(0, 100)
+ax1.tick_params(axis='y', colors='lightcoral')
+ax2.set_ylim(0, 1.01)
+ax2.tick_params(axis='y', colors='lightskyblue')
+
+pf_df = performance_df.drop(['Trial','Run_id','Mental Demand', 'Physical Demand', 'Temporal Demand', 'Performance', 'Effort', 'Frustration', 'Total TLX'], axis=1)
+pf_df['Correct Rejection'] = 20 - pf_df['Hit'] - pf_df['Miss'] - pf_df['False Alarm']
+pf_df[['Self-assessment']] = (pf_df[['100 - Performance']])/100
+pf_df = pf_df.melt(['Subject','Run','N','Self-assessment'])
+pf_df.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
+pf_df = pd.pivot_table(pf_df, values='Count', index=['Subject','Run','N','Self-assessment' ], columns='Criterion', aggfunc='sum')
+pf_df['Detection Rate'] = pf_df['Hit']/(pf_df['Hit'] + pf_df['Miss'])
+pf_df['False Alarm Rate'] = pf_df['False Alarm']/(pf_df['False Alarm'] + pf_df['Correct Rejection'])
+pf_df['Accuracy'] = (pf_df['Hit']+pf_df['Correct Rejection'])/(pf_df['Hit']+pf_df['Correct Rejection']+pf_df['False Alarm'] + pf_df['Miss'])
+pf_df = pf_df.reset_index()
+pf_df = pf_df.rename_axis(None, axis=1)
+pf_df = pf_df.drop(['100 - Performance', 'Hit', 'Miss', 'False Alarm', 'Correct Rejection','Detection Rate','False Alarm Rate'], axis=1)
+pf_df = pf_df.melt(['Subject','Run','N'])
+pf_df.rename(columns={'variable':'Criterion', 'value': 'Scale'}, inplace=True)
+facet_kws = {'ylim':(0, 1.2)}
+p5c = sns.catplot(data=pf_df, x='N', y='Scale', hue='Criterion',
+                errorbar='ci', facet_kws=facet_kws,kind='bar', height=5, order=['0','1','2','3'], palette='coolwarm')
+p5c.despine(offset=5, trim=True)
+p5c.set_xticklabels(fontsize=12)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "behavioral_vs_accuracy.svg"
+plt.savefig(filename, format='svg')
+
+fig, ax1 = plt.subplots(figsize=(5, 5))
+p5d1=sns.pointplot(data=performance_byrun_df, x='N', y='Detection Rate',
+                errorbar='ci', capsize=0.02, color='lightskyblue', linestyles='-', markers='s', order=['0','1','2','3'],ax=ax1)
+# p71=sns.barplot(data=performance_byrun_df, x='N', y='Detection Rate',
+#                 palette='rocket_r', order=['0','1','2','3'],ax=ax1)
+p5d2=sns.pointplot(data=performance_byrun_df, x='N', y='False Alarm Rate',
+                errorbar='ci', capsize=0.02, color='lightcoral', linestyles='-', markers='s', order=['0','1','2','3'],ax=ax1)
+ax2 = ax1.twinx()
+p5d3=sns.pointplot(data=performance_byrun_df, x='N', y='RT',
+                  errorbar='ci', capsize=0.02, color='black', linestyles='-', markers='s', order=['0','1','2','3'], ax=ax2)
+ax1.set_ylim(0, 1.01)
+ax2.set_ylim(0.6, 1.6)
+ax2.set_xlabel('RT (s)')
+ax2.legend(['RT'])
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "task_performance.svg"
+plt.savefig(filename, format='svg')
+
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('offset')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('knee')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('exponent')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('cf')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('bw')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('error')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('r_squared')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+# cols_to_drop += feature_df.columns[feature_df.columns.str.contains('pw')]
+# feature_df.drop(cols_to_drop, axis=1, inplace=True)
+# cols_to_drop = feature_df.columns[feature_df.columns.str.contains('avg')]
+# feature_df.drop(cols_to_drop, axis=1, inplace=True)
+
+feature_df['Delta'] = feature_df[['AF8_delta','Fp1_delta','Fp2_delta','AF7_delta']].mean(axis=1)
+feature_df['Theta'] = feature_df[['AF8_theta','Fp1_theta','Fp2_theta','AF7_theta']].mean(axis=1)
+feature_df['Alpha'] = feature_df[['AF8_alpha','Fp1_alpha','Fp2_alpha','AF7_alpha']].mean(axis=1)
+feature_df['Beta'] = feature_df[['AF8_beta','Fp1_beta','Fp2_beta','AF7_beta']].mean(axis=1)
+feature_df['Gamma'] = feature_df[['AF8_gamma','Fp1_gamma','Fp2_gamma','AF7_gamma']].mean(axis=1)
+feature_df['aot'] = feature_df[['AF8_aot','Fp1_aot','Fp2_aot','AF7_aot']].mean(axis=1)
+feature_df['atob'] = feature_df[['AF8_atob','Fp1_atob','Fp2_atob','AF7_atob']].mean(axis=1)
+feature_df['aob'] = feature_df[['AF8_aob','Fp1_aob','Fp2_aob','AF7_aob']].mean(axis=1)
+feature_df['tboa'] = feature_df[['AF8_tboa','Fp1_tboa','Fp2_tboa','AF7_tboa']].mean(axis=1)
+feature_df['toab'] = feature_df[['AF8_toab','Fp1_toab','Fp2_toab','AF7_toab']].mean(axis=1)
+feature_df['bota'] = feature_df[['AF8_bota','Fp1_bota','Fp2_bota','AF7_bota']].mean(axis=1)
+
+feature_df['delta_flat'] = feature_df[['AF8_delta_flat','Fp1_delta_flat','Fp2_delta_flat','AF7_delta_flat']].mean(axis=1)
+feature_df['theta_flat'] = feature_df[['AF8_theta_flat','Fp1_theta_flat','Fp2_theta_flat','AF7_theta_flat']].mean(axis=1)
+feature_df['alpha_flat'] = feature_df[['AF8_alpha_flat','Fp1_alpha_flat','Fp2_alpha_flat','AF7_alpha_flat']].mean(axis=1)
+feature_df['beta_flat'] = feature_df[['AF8_beta_flat','Fp1_beta_flat','Fp2_beta_flat','AF7_beta_flat']].mean(axis=1)
+feature_df['gamma_flat'] = feature_df[['AF8_gamma_flat','Fp1_gamma_flat','Fp2_gamma_flat','AF7_gamma_flat']].mean(axis=1)
+feature_df['aot_flat'] = feature_df[['AF8_aot_flat','Fp1_aot_flat','Fp2_aot_flat','AF7_aot_flat']].mean(axis=1)
+feature_df['atob_flat'] = feature_df[['AF8_atob_flat','Fp1_atob_flat','Fp2_atob_flat','AF7_atob_flat']].mean(axis=1)
+feature_df['aob_flat'] = feature_df[['AF8_aob_flat','Fp1_aob_flat','Fp2_aob_flat','AF7_aob_flat']].mean(axis=1)
+feature_df['tboa_flat'] = feature_df[['AF8_tboa_flat','Fp1_tboa_flat','Fp2_tboa_flat','AF7_tboa_flat']].mean(axis=1)
+feature_df['toab_flat'] = feature_df[['AF8_toab_flat','Fp1_toab_flat','Fp2_toab_flat','AF7_toab_flat']].mean(axis=1)
+feature_df['bota_flat'] = feature_df[['AF8_bota_flat','Fp1_bota_flat','Fp2_bota_flat','AF7_bota_flat']].mean(axis=1)
+
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('AF7')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('Fp1')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('Fp2')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('AF8')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+# Compute the correlation matrix
+corr = feature_df.corr()
+# Set up the matplotlib figure
+f, ax = plt.subplots(figsize=(11, 9))
+# Generate a custom diverging colormap
+cmap = sns.diverging_palette(230, 20, as_cmap=True)
+# Draw the heatmap with the mask and correct aspect ratio
+p8 = sns.heatmap(corr, cmap=cmap, center=0,
+            square=True, linewidths=.5, vmin=-0.5, cbar_kws={'shrink': .5})
+print(corr['N'])
+# plt.show(block=True)
+
+feature_df['Delta'] = feature_df['delta_flat']
+feature_df['Theta'] = feature_df['theta_flat']
+feature_df['Alpha'] = feature_df['alpha_flat']
+feature_df['Beta'] = feature_df['beta_flat']
+feature_df['Gamma'] = feature_df['gamma_flat']
+feature_df['aot'] = feature_df['aot_flat']
+feature_df['atob'] = feature_df['atob_flat']
+feature_df['aob'] = feature_df['aob_flat']
+feature_df['tboa'] = feature_df['tboa_flat']
+feature_df['toab'] = feature_df['toab_flat']
+feature_df['bota'] = feature_df['bota_flat']
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('flat')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+
+feature_df['Blinks'] = feature_df['nblinks']
+feature_df['Saccades'] = feature_df['nsaccades']
+feature_df['Avg. Blink Dur.'] = feature_df['avg_blink_dur']
+feature_df['Avg. Saccade Dur.'] = feature_df['avg_saccade_dur']
+feature_df['Avg. Blink Peak'] = feature_df['avg_blink_peak']
+# feature_df.rename(columns={'avg_blink_dur':'Average Blink Duration', 'avg_saccade_dur': 'Average Saccade Duration','avg_blink_peak': 'Average Blink Peak'}, inplace=True)
+cols_to_drop = feature_df.columns[feature_df.columns.str.contains('avg')]
+feature_df.drop(cols_to_drop, axis=1, inplace=True)
+feature_df.drop(['pblinks', 'psaccades', 'timing','aot','atob','aob','tboa','bota','nblinks','nsaccades'], axis=1, inplace=True)
+df = feature_df.reset_index()
+df = feature_df.drop('index', axis=1)
+df = df.melt(['Subject','Run','Trial', 'N'])
+df.rename(columns={'variable':'Feature', 'value': 'Scale'}, inplace=True)
+df.reset_index()
+
+p5e = sns.catplot(data=df, x='N', y='Scale', col='Feature',
+                errorbar='ci', kind='bar', height=5, aspect=1, col_wrap=4, palette='rocket_r', sharey=False,
+                col_order=['Delta', 'Theta', 'Alpha', 'Beta', 'Gamma', 'toab', 'Avg. Blink Peak', 'Avg. Saccade Dur.'])
+p5e.despine(offset=5, trim=True)
+p5e.set_xticklabels(fontsize=12)
+ax0=p5e.axes[0]
+ax1=p5e.axes[1]
+ax2=p5e.axes[2]
+ax3=p5e.axes[3]
+ax4=p5e.axes[4]
+ax5=p5e.axes[5]
+ax6=p5e.axes[6]
+ax7=p5e.axes[7]
+
+ax0.set_ylim(0,60)
+ax1.set_ylim(0,6)
+ax2.set_ylim(0,2)
+ax3.set_ylim(0,0.6)
+ax4.set_ylim(0,0.5)
+ax5.set_ylim(0,12)
+ax6.set_ylim(0,800)
+ax7.set_ylim(0,0.05)
+# ax6.set_ylim(0,4)
+# ax7.set_ylim(0,30)
+ax0.spines['left'].set_bounds((0, 60))
+ax1.spines['left'].set_bounds((0, 6))
+ax2.spines['left'].set_bounds((0, 2))
+ax3.spines['left'].set_bounds((0, 0.6))
+ax4.spines['left'].set_bounds((0, 0.5))
+ax5.spines['left'].set_bounds((0, 12))
+ax6.spines['left'].set_bounds((0, 800))
+ax7.spines['left'].set_bounds((0, 0.05))
+# ax6.spines['left'].set_bounds((0, 4))
+# ax7.spines['left'].set_bounds((0, 30))
+ax0.set_yticks([0, 30, 60])
+ax1.set_yticks([0,3,6])
+ax2.set_yticks([0,1,2])
+ax3.set_yticks([0,0.3,0.6])
+ax4.set_yticks([0,0.25,0.5])
+ax5.set_yticks([0,6,12])
+ax6.set_yticks([0,400,800])
+ax7.set_yticks([0,0.025,0.05])
+# ax6.set_yticks([0,2,4])
+# ax7.set_yticks([0,10,20,30])
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "feature_analysis.svg"
+plt.savefig(filename, format='svg')
+
+feature_df[['N']] = feature_df[['N']].astype(str)
+plots = ['Delta', 'Theta', 'Alpha', 'Beta', 'Gamma', 'toab', 'Avg. Blink Peak', 'Avg. Saccade Dur.']
+for s in plots:
+    n0 = feature_df.loc[(feature_df.N == '0'), s].values
+    n1 = feature_df.loc[(feature_df.N == '1'), s].values
+    n2 = feature_df.loc[(feature_df.N == '2'), s].values
+    n3 = feature_df.loc[(feature_df.N == '3'), s].values
+    stat_results_mwu = [
+    mannwhitneyu(n0, n1, alternative='two-sided'),
+    mannwhitneyu(n1, n2, alternative='two-sided'),
+    mannwhitneyu(n2, n3, alternative='two-sided'),
+    mannwhitneyu(n0, n3, alternative='two-sided'),
+    mannwhitneyu(n1, n3, alternative='two-sided'),
+    mannwhitneyu(n0, n2, alternative='two-sided')
+    ]
+    stat_results_ttest = [
+    ttest_ind(n0, n1, alternative='two-sided'),
+    ttest_ind(n1, n2, alternative='two-sided'),
+    ttest_ind(n2, n3, alternative='two-sided'),
+    ttest_ind(n0, n3, alternative='two-sided'),
+    ttest_ind(n1, n3, alternative='two-sided'),
+    ttest_ind(n0, n2, alternative='two-sided')
+    ]
+    sig_symbals = ['ns']*6
+    pvalues = [result.pvalue for result in stat_results_mwu]
+    print(pvalues)
+    for i, p in enumerate(pvalues):
+        if p >= 0.05:
+            sig_symbals[i] = 'ns'
+        elif p < 0.05 and p >= 0.01:
+            sig_symbals[i] = '*'
+        elif p < 0.01 and p >= 0.001:
+            sig_symbals[i] = '**'
+        else:
+            sig_symbals[i] = '***'
+    print(s,' 0 vs 1: \n', stat_results_mwu[0], stat_results_ttest[0], sig_symbals[0], '\n')
+    print(s,' 1 vs 2: \n', stat_results_mwu[1], stat_results_ttest[1], sig_symbals[1], '\n')
+    print(s,' 2 vs 3: \n', stat_results_mwu[2], stat_results_ttest[2], sig_symbals[2], '\n')
+    print(s,' 0 vs 3: \n', stat_results_mwu[3], stat_results_ttest[3], sig_symbals[3], '\n')
+    print(s,' 1 vs 3: \n', stat_results_mwu[4], stat_results_ttest[4], sig_symbals[3], '\n')
+    print(s,' 0 vs 2: \n', stat_results_mwu[5], stat_results_ttest[5], sig_symbals[3], '\n')
+
+cols_to_use = feature_df.columns.difference(performance_df.columns)
+data_df = pd.merge(performance_df, feature_df[cols_to_use], left_index=True, right_index=True, how='outer')
+data_df.drop('Run_id', axis=1, inplace=True)
+data_df.dropna()
+
+
+feature_corr_plot_df = feature_df
+feature_corr_plot_df.drop(['index', 'Subject','Run','Trial', 'N'], axis=1, inplace=True)
+# Compute the correlation matrix
+corr = feature_corr_plot_df.corr()
+# Set up the matplotlib figure
+f, ax = plt.subplots(figsize=(11, 9))
+# Generate a custom diverging colormap
+cmap = sns.diverging_palette(230, 20, as_cmap=True)
+# Draw the heatmap with the mask and correct aspect ratio
+p9 = sns.heatmap(corr, cmap=cmap, center=0,
+            square=True, linewidths=.5, vmin=-0.5, cbar_kws={'shrink': .5})
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "feature_corr.svg"
+plt.savefig(filename, format='svg')
+
+data_corr_plot_df = data_df
+data_corr_plot_df = data_corr_plot_df.drop(['index', 'Subject','Run','Trial'], axis=1, inplace=False)
+# Compute the correlation matrix
+corr = data_corr_plot_df.corr()
+# Set up the matplotlib figure
+f, ax = plt.subplots(figsize=(11, 9))
+# Generate a custom diverging colormap
+cmap = sns.diverging_palette(230, 20, as_cmap=True)
+# Draw the heatmap with the mask and correct aspect ratio
+plt.rcParams.update({'font.size': 10})
+p10 = sns.heatmap(corr, cmap=cmap, center=0,
+            square=True, linewidths=.5, vmin=-0.5, cbar_kws={'shrink': .5})
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "data_corr.svg"
+plt.savefig(filename, format='svg')
+
+data_p_run_df = data_df
+sum_df =data_p_run_df
+sum_df = sum_df.drop(['index','Mental Demand', 
+        'Physical Demand', 'Temporal Demand', 'Performance', 
+        'Effort', 'Frustration', 'Total TLX', '100 - Performance', 
+        'Alpha', 'Beta', 'Delta', 'Theta', 'Gamma', 'toab', 
+        'Avg. Blink Dur.', 'Avg. Blink Peak', 'Avg. Saccade Dur.'], axis=1)
+sum_df['Correct Rejection'] = 20 - sum_df['Hit'] - sum_df['Miss'] - sum_df['False Alarm']
+sum_df = sum_df.melt(['Subject','Run','N'])
+sum_df.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
+sum_df = pd.pivot_table(sum_df, values='Count', index=['Subject','Run','N'], columns='Criterion', aggfunc='sum')
+sum_df['Detection Rate'] = sum_df['Hit']/(sum_df['Hit'] + sum_df['Miss'])
+sum_df['False Alarm Rate'] = sum_df['False Alarm']/(sum_df['False Alarm'] + sum_df['Correct Rejection'])
+sum_df['Accuracy'] = (sum_df['Hit']+sum_df['Correct Rejection'])/(sum_df['Hit']+sum_df['Correct Rejection']+sum_df['False Alarm'] + sum_df['Miss'])
+sum_df = sum_df.reset_index()
+sum_df = sum_df.rename_axis(None, axis=1)
+cols_to_use = rt_df.columns.difference(sum_df.columns)
+sum_df = pd.merge(sum_df, rt_df[cols_to_use], left_index=True, right_index=True, how='outer')
+mean_df =data_p_run_df
+mean_df = mean_df.drop(['index', '100 - Performance', 'Hit', 'Miss', 'False Alarm',
+                        'Blinks', 'Saccades'], axis=1)
+mean_df = mean_df.melt(['Subject','Run','N'])
+mean_df.rename(columns={'variable':'Criterion', 'value': 'Count'}, inplace=True)
+mean_df = pd.pivot_table(mean_df, values='Count', index=['Subject','Run','N'], columns='Criterion', aggfunc='mean')
+mean_df = mean_df.reset_index()
+mean_df = mean_df.rename_axis(None, axis=1)
+cols_to_use = sum_df.columns.difference(mean_df.columns)
+data_p_run_df = pd.merge(mean_df, sum_df[cols_to_use], left_index=True, right_index=True, how='outer')
+corr = data_p_run_df.corr()
+print('Accuracy\n', corr['Accuracy'])
+print('Total TLX\n',corr['Total TLX'])
+print('Mental Demand\n',corr['Mental Demand'])
+
+
+
+alpha_df = data_p_run_df.copy()
+cols_to_use = alpha_df.columns.difference(['N', 'Alpha', 'Accuracy']).to_list()
+alpha_df.drop(cols_to_use, axis=1, inplace=True)
+alpha_df = alpha_df.rename_axis(None, axis=1)
+alpha_df = alpha_df.melt(['N'])
+alpha_df.rename(columns={'variable':'Criterion', 'value': 'Scale'}, inplace=True)
+facet_kws = {'ylim':(0, 1.2)}
+p5f1 = sns.catplot(data=alpha_df, x='N', y='Scale', hue='Criterion',
+                errorbar='ci', facet_kws=facet_kws,kind='bar', height=5, order=['0','1','2','3'], palette='coolwarm')
+p5f1.despine(offset=5, trim=True)
+p5f1.set_xticklabels(fontsize=12)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "alpha_vs_accuracy.svg"
+plt.savefig(filename, format='svg')
+
+theta_df = data_p_run_df.copy()
+cols_to_use = theta_df.columns.difference(['N', 'Theta', 'Accuracy']).to_list()
+theta_df.drop(cols_to_use, axis=1, inplace=True)
+theta_df = theta_df.rename_axis(None, axis=1)
+theta_df = theta_df.melt(['N'])
+theta_df.rename(columns={'variable':'Criterion', 'value': 'Scale'}, inplace=True)
+facet_kws = {'ylim':(0, 1.2)}
+p5f2 = sns.catplot(data=theta_df, x='N', y='Scale', hue='Criterion',
+                errorbar='ci', facet_kws=facet_kws,kind='bar', height=5, order=['0','1','2','3'], palette='coolwarm')
+p5f2.despine(offset=5, trim=True)
+p5f2.set_xticklabels(fontsize=12)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "theta_vs_accuracy.svg"
+plt.savefig(filename, format='svg')
+
+toab_df = data_p_run_df.copy()
+cols_to_use = toab_df.columns.difference(['N', 'toab', 'Accuracy']).to_list()
+toab_df.drop(cols_to_use, axis=1, inplace=True)
+toab_df = toab_df.rename_axis(None, axis=1)
+toab_df = toab_df.melt(['N'])
+toab_df.rename(columns={'variable':'Criterion', 'value': 'Scale'}, inplace=True)
+facet_kws = {'ylim':(0, 1.2)}
+p5f3 = sns.catplot(data=toab_df, x='N', y='Scale', hue='Criterion',
+                errorbar='ci', facet_kws=facet_kws,kind='bar', height=5, order=['0','1','2','3'], palette='coolwarm')
+p5f3.despine(offset=5, trim=True)
+p5f3.set_xticklabels(fontsize=12)
+mpl.rcParams['font.sans-serif'] = "Myriad Pro"
+mpl.rcParams['font.family'] = "sans-serif"
+filename = "toab_df_vs_accuracy.svg"
+plt.savefig(filename, format='svg')
+
+
+
+debug
+data_p_run_df = data_p_run_df.reset_index()
+data_p_run_df.drop('index', axis=1)
+alpha_vs_accuracy = (
+    data_p_run_df.pivot(index='N', columns='Accuracy', values='Alpha')
+)
+# Draw a heatmap with the numeric values in each cell
+f, ax = plt.subplots(figsize=(9, 6))
+sns.heatmap(alpha_vs_accuracy, annot=True, linewidths=.5, ax=ax)
+
+plt.show(block=True)
+'''
+raw1 = mne.io.read_raw_fif(os.path.join(os.getcwd(), 'data/HS_Data/S6/sub-P006_ses-S002_task-Default_run-001_.fif'))
+raw1.plot(block=False, title='HS')
+print(raw1.info)
+
+raw2 = mne.io.read_raw_fif(os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S2/ForeheadE-tattoo_sub-P002_ses-S003_task-Default_run-001_eeg_raw.fif'))
+raw2.plot(block=False, title='HH')
+print(raw2.info)
+
+plt.show(block=True)
+'''
+'''
+subjects = ['S1','S2','S3','S4','S5','S6']
+for s in subjects:
+    data_folder_path = os.path.join(os.getcwd(), 'data/HS_Data', s)
+    raw_data_list = os.listdir(data_folder_path)
+    for file_name in raw_data_list:
+        if file_name.endswith('_.fif'):
+            run_idx = int(file_name.split('run-')[1].split('_.fif')[0])
+            raw_path = os.path.join(data_folder_path, file_name)
+            raw = mne.io.read_raw_fif(raw_path)
+            raw.plot(block=False, title=s+'R'+str(run_idx))
+plt.show(block=True)
+'''

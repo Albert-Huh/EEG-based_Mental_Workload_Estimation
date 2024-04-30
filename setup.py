@@ -37,17 +37,17 @@ class Setup:
                                          jitter_break_threshold_samples=50)
         #fix bad xdf streams
         streams = self._xdf_tiebreak(streams)
-        streams = streams[0:14]
-        fig, ax = plt.subplots(nrows=len(streams))
-        fig.suptitle('Raw XDF')
-        for i, stream in enumerate(streams):
-            ax[i].plot(stream['time_stamps'],stream['time_series'].T[0,:],label=i)
-            ax[i].set_xlabel('Time (s)')
-            ax[i].set_ylabel('Signal')
-        plt.show()
-        debug
+        # streams = streams[0:14]
+        # fig, ax = plt.subplots(nrows=len(streams))
+        # fig.suptitle('Raw XDF')
+        # for i, stream in enumerate(streams):
+        #     ax[i].plot(stream['time_stamps'],stream['time_series'].T[0,:],label=i)
+        #     ax[i].set_xlabel('Time (s)')
+        #     ax[i].set_ylabel('Signal')
+        # plt.show()
+        # debug
         streams = self._drop_bad_stream(streams)
-        debug
+        # debug
 
         # detect trigger/STIM stream id
         list_stim_id = pyxdf.match_streaminfos(pyxdf.resolve_streams(self.data_path), [{'type': 'Markers'}])
@@ -167,6 +167,7 @@ class Setup:
             ch_name = self.stream_source['ch_name'][source_ind] # get ForeheadE-tattoo stream channel name
             ch_type = self.stream_source['ch_type'][source_ind] # get ForeheadE-tattoo stream channel type
             sfreq = min(srate)
+            print(srate)
             # sfreq = stream['info']['effective_srate'] # get sampling frequnecy
             # sfreq = float(et_stream[0]['info']['nominal_srate'][0]) # get sampling frequnecy
             et_info = mne.create_info(ch_name, sfreq, ch_type) # create mne info
@@ -286,7 +287,7 @@ class Setup:
         last_samp = max(stream['time_stamps'][-1] for stream in eeg_streams)
         for stream in eeg_streams:
             # drop stream with siginificant packet lost
-            if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 0.1*float(stream['info']['nominal_srate'][0]):
+            if np.abs(stream['info']['effective_srate']-float(stream['info']['nominal_srate'][0])) > 0.15*float(stream['info']['nominal_srate'][0]):
                 streams.remove(stream)
                 print(stream['info']['name'][0] + ' removed: siginificant packet lost')
                 continue
@@ -296,17 +297,17 @@ class Setup:
                 print(stream['info']['name'][0] + ' removed: disconnected stream')
         return streams
 
-    def set_annotation(raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
+    def set_annotation(self, raw: mne.io.Raw, onset: np.ndarray, duration: np.ndarray, description: np.ndarray):
         my_annot = mne.Annotations(onset=onset, duration=duration, description=description)
         raw.set_annotations(my_annot)
 
-    def get_annotation_info(raw: mne.io.Raw):
+    def get_annotation_info(self, raw: mne.io.Raw):
         onset = raw.annotations.onset
         duration = raw.annotations.duration
         description = raw.annotations.description
         return onset, duration, description # ndarray or float, float, str
 
-    def annotate_interactively(raw: mne.io.Raw):
+    def annotate_interactively(self, raw: mne.io.Raw):
         fig = raw.plot()
         fig.fake_keypress('a')
         plt.show(block=True)

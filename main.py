@@ -9,6 +9,7 @@ from matplotlib.colors import TwoSlopeNorm
 from setup import Setup as setup
 from setup import N_back_report as nback
 import preprocessing
+import open_tat
 
 # graphic render params
 new_rc_params = {'text.usetex': False, 'svg.fonttype': 'none'}
@@ -17,17 +18,23 @@ mpl.rcParams.update(new_rc_params)
 ############### IMPORT & CONVERT DATA ###############
 def prep_data():
     # get list of raw data file names in local data folder
-    subject_idx = '6'
+    subject_idx = '4'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
     for file_name in raw_data_list:
-        if file_name.endswith('.xdf'):
+        if file_name.endswith('eeg_raw.fif'):
+            preprocessed = True
+            run_idx = int(file_name.split('run-')[1].split('_eeg_raw.fif')[0])
+            raw_path = os.path.join(data_folder_path, file_name)
+            raw = mne.io.read_raw_fif(raw_path)
+            # Show imported raw data
+            raw.plot(block=True,title='R'+str(run_idx))
+        if file_name.endswith('eeg.xdf'):
             preprocessed = False
             for name in raw_data_list:
                 if file_name.replace('.xdf','_raw.fif') in name:
                     preprocessed = True
-                    print(file_name, 'already has a preprocessed .fif file.')
             if preprocessed == False and not file_name.startswith('training'):
                 print(file_name, 'is not preprocessed.')
                 # create dict of lsl stream info
@@ -83,7 +90,7 @@ def eye_oc():
 ############### SIGNAL PROCESSING & N-BACK ANALYSIS ###############
 def n_back_analysis():
     # list of raw data files in local data folder
-    subject_idx = '3'
+    subject_idx = '4'
     data_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data/S'+subject_idx)
     raw_data_list = os.listdir(data_folder_path)
 
@@ -267,6 +274,11 @@ def n_back_analysis():
         'Physical Discomfort': [1,1,1,2],
         'Lack of Motivation': [1,0,2,1],
         'Sleepiness': [2,2,2,1]} # run 0 1 2 3
+    survey4 = {'Lack of Energy': [0,2,4,4],
+        'Physical Exertion': [1,3,4,4],
+        'Physical Discomfort': [1,1,1,1],
+        'Lack of Motivation': [0,0,2,1],
+        'Sleepiness': [0,2,2,3]} # run 0 1 2 4
     survey5 = {'Lack of Energy': [5,2,4,2],
         'Physical Exertion': [3,3,6,6],
         'Physical Discomfort': [4,3,6,6],

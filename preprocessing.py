@@ -70,10 +70,11 @@ class Filtering:
             npad='auto', window=window, events=events, verbose=verbose)
         return filt_raw
 
-    def bandpass(self, cutoff_freq=None, filt_type='fir', iir_params=None,
+    def bandpass(self, cutoff_freq=None, picks=None, filt_type='fir', iir_params=None,
         show_filt_params = False, verbose='warning'):
 
-        picks=self.picks
+        if picks == None:
+            picks=self.picks
         if cutoff_freq == None:
             cutoff_freq = [self.l_freq, self.h_freq]
         filt_raw = self.raw.filter(l_freq=cutoff_freq[0], h_freq=cutoff_freq[1], picks=picks, method=filt_type, 
@@ -201,7 +202,7 @@ class Indepndent_Component_Analysis:
             eog_treshold='auto', ecg_treshold='auto', reject_by_annotation=True,
             measure='correlation', plot_fig=False, verbose='warning')
         print(eog_indices + ecg_indices)
-        # self.visualize_ICA_components()
+        self.visualize_ICA_components()
         self.exclude_ica(eog_indices + ecg_indices)
         if exclude == None:
             exclude = list(input('Components to exclude: ').split(','))

@@ -10,8 +10,9 @@ from setup import Setup as setup
 from setup import N_back_report as nback
 import preprocessing
 
+
 # list of raw data files in local data folder
-subject_ids = ['1','2','3','5']
+subject_ids = ['1','2','3','4','5','6']
 df_list = []
 rt_df_list = []
 all_subject_epoch_list = []
@@ -244,6 +245,9 @@ df3 = df3.rename_axis(None, axis=1)
 cols_to_use = rt_df.columns.difference(df3.columns)
 df3 = pd.merge(df3, rt_df[cols_to_use], left_index=True, right_index=True, how='outer')
 
+df_folder_path = os.path.join(os.getcwd(), 'data/UT_Experiment_Data')
+df_path = os.path.join(df_folder_path, file_name)
+pd.to_pickle(df, ".\data\.pkl") 
 # setting font sizeto 30
 plt.rcParams.update({'font.size': 16})
 '''
@@ -386,7 +390,7 @@ fig.suptitle('Band Powers vs. N')
 fig.subplots_adjust(wspace=0.5)
 sns.despine(fig, offset=5, trim=True)
 plt.show()
-debug
+
 conds = ['hit', 'false_alarm', 'miss', 'correct_rejection']
 psd_info_df = pd.DataFrame()
 for n in conds:  # Go through each n-back trial

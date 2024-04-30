@@ -49,13 +49,59 @@ for file_name in raw_data_list:
             #fix bad xdf streams
             streams = _xdf_tiebreak(raw_path, streams)
             streams = streams[0:14]
+            for stream in streams:
+                p = stream['time_stamps'].argsort()
+                stream['time_stamps'] = stream['time_stamps'][p]
+                stream['time_series'] = stream['time_series'][p]
             fig, ax = plt.subplots(nrows=len(streams))
             fig.suptitle('Raw XDF')
+            fig2, ax2 = plt.subplots(nrows=len(streams))
+            fig2.suptitle('Time Stamps')
             for i, stream in enumerate(streams):
                 ax[i].plot(stream['time_stamps'],stream['time_series'].T[0,:],label=i)
                 ax[i].set_xlabel('Time (s)')
                 ax[i].set_ylabel('Signal')
+                ax2[i].plot(range(len(stream['time_stamps'])),stream['time_stamps'],label=i)
+                ax2[i].set_xlabel('n')
+                ax2[i].set_ylabel('Time (s)')
             plt.show()
+            debug
+            stream3 = streams[3]
+            stream3_1 = streams[3]
+            stream3_2 = streams[3]
+            fig, ax = plt.subplots(nrows=1)
+            ax.plot(range(len(stream3['time_stamps'])),stream3['time_stamps'],label=i)
+            ax.set_xlabel('n')
+            ax.set_ylabel('Time (s)')
+            plt.show()
+            print(len(stream3['time_stamps']))
+            for i in range(len(stream3['time_stamps'])):
+                # print(streams[0]['time_stamps'][-1])
+                # print(stream3['time_stamps'][i])
+                # debug
+                # print(abs(stream3['time_stamps'][i] - streams[0]['time_stamps'][-1]))
+                # if abs(stream3['time_stamps'][i] - streams[0]['time_stamps'][-1]) < 0.004:
+                #     # stream3_1 = stream3
+                #     stream3_1['time_stamps'] = stream3['time_stamps'][:i]
+                #     stream3_1['time_series'] = stream3['time_series'][:i]
+                #     debug
+                print(abs(streams[1]['time_stamps'][0]-stream3['time_stamps'][i]))
+                if abs(stream3['time_stamps'][i] - streams[1]['time_stamps'][0]) < 0.004:
+                    # stream3_2 = stream3
+                    stream3_2['time_stamps'] = stream3['time_stamps'][i:]
+                    stream3_2['time_series'] = stream3['time_series'][i:]
+                    debug
+            debug
+            streams1 = [stream3_1, stream3_2]
+            fig, ax = plt.subplots(nrows=len(streams1))
+            fig.suptitle('Raw XDF')
+            for i, stream in enumerate(streams1):
+                ax[i].plot(stream['time_stamps'],stream['time_series'].T[0,:],label=i)
+                ax[i].set_xlabel('Time (s)')
+                ax[i].set_ylabel('Signal')
+            stream_idx1 = [0,2,]
+            stream_ind2 = []
+            streams1 = [streams]
             debug 
 
             # detect trigger/STIM stream id
